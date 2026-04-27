@@ -1,0 +1,9 @@
+{
+  "name": "薪工場 出退勤管理",
+  "short_name": "薪工場",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1B5E20",
+  "theme_color": "#1B5E20",
+  "icons": []
+}

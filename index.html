@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1B5E20">
+<title>薪工場 出退勤</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans JP','Hiragino Sans',sans-serif;background:#ECEFF1;-webkit-tap-highlight-color:transparent}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyCZlOZicOB-n3coNG3aK6Z2gPwpvDm9F-s",
+  authDomain:"makiba-shift.firebaseapp.com",
+  projectId:"makiba-shift",
+  storageBucket:"makiba-shift.firebasestorage.app",
+  messagingSenderId:"184456307657",
+  appId:"1:184456307657:web:c9a0b20b671148f5b07e18"
+});
+var db=firebase.firestore();
+</script>
+<script type="text/babel">
+var useState=React.useState;
+var useEffect=React.useEffect;
+var MEMBERS=[
+  {id:"hamabe",name:"浜辺",pin:"1111"},
+  {id:"kambara",name:"神原",pin:"2222"},
+  {id:"yamamoto",name:"山本",pin:"3333"},
+  {id:"tomioka",name:"富岡",pin:"4444"},
+  {id:"gushiken",name:"具志堅",pin:"5555"},
+  {id:"handa",name:"半田",pin:"6666"}
+];
+var ACTIONS=[
+  {id:"checkin",label:"出 勤",icon:"\u{1F3ED}",color:"#2E7D32"},
+  {id:"checkout",label:"退 勤",icon:"\u{1F3E0}",color:"#C62828"},
+  {id:"ignite_golden",label:"着火（黄金泉）",icon:"\u{1F525}",color:"#E65100"},
+  {id:"ignite_motoyu",label:"着火（元 湯）",icon:"\u{1F525}",color:"#4E342E"},
+  {id:"inject",label:"投 入",icon:"\u{1FAB5}",color:"#1565C0"}
+];
+function pad(n){return n<10?"0"+n:""+n}
+function fmtTime(d){return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())}
+function fmtDate(d){return d.getFullYear()+"/"+pad(d.getMonth()+1)+"/"+pad(d.getDate())}
+function todayKey(){var d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+
+function App(){
+  var _p=useState("select"),page=_p[0],setPage=_p[1];
+  var _u=useState(null),user=_u[0],setUser=_u[1];
+  var _st=useState([]),stamps=_st[0],setStamps=_st[1];
+  var _msg=useState(null),msg=_msg[0],setMsg=_msg[1];
+  var _gps=useState(null),gps=_gps[0],setGps=_gps[1];
+  var _now=useState(new Date()),now=_now[0],setNow=_now[1];
+  var _pin=useState(""),pin=_pin[0],setPin=_pin[1];
+  var _su=useState(null),selUser=_su[0],setSelUser=_su[1];
+  var _conf=useState(null),cnf=_conf[0],setCnf=_conf[1];
+  var _all=useState([]),allSt=_all[0],setAllSt=_all[1];
+
+  useEffect(function(){var t=setInterval(function(){setNow(new Date());},1000);return function(){clearInterval(t);};},[]);
+
+  function loadMy(uid){
+    db.collection("stamps").where("userId","==",uid).where("dateKey","==",todayKey()).orderBy("time","desc")
+      .onSnapshot(function(snap){var a=[];snap.forEach(function(doc){a.push(doc.data());});setStamps(a);});
+  }
+  function loadAll(){
+    db.collection("stamps").where("dateKey","==",todayKey()).orderBy("time","desc")
+      .onSnapshot(function(snap){var a=[];snap.forEach(function(doc){a.push(doc.data());});setAllSt(a);});
+  }
+  function getGps(){
+    if(navigator.geolocation){navigator.geolocation.getCurrentPosition(function(p){setGps({lat:p.coords.latitude,lng:p.coords.longitude});},function(){setGps(null);});}
+  }
+  function login(m){setUser(m);loadMy(m.id);setPage("main");setMsg(null);getGps();}
+  function logout(){setUser(null);setStamps([]);setPage("select");setPin("");setSelUser(null);setCnf(null);}
+  function doStamp(a){
+    var t=new Date();
+    db.collection("stamps").add({
+      userId:user.id,userName:user.name,action:a.id,label:a.label,icon:a.icon,
+      time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),
+      gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null
+    });
+    setMsg(a.label+" を記録しました");setCnf(null);
+    setTimeout(function(){setMsg(null);},3000);getGps();
+  }
+
+  function pinPad(onComplete,onBack){
+    return(
+      <div style={{textAlign:"center"}}>
+        <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:24}}>
+          {[0,1,2,3].map(function(i){
+            return(<div key={i} style={{width:52,height:60,borderRadius:10,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:700,color:"#fff"}}>{pin.length>i?"\u25CF":""}</div>);
+          })}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,maxWidth:280,margin:"0 auto"}}>
+          {[1,2,3,4,5,6,7,8,9,"",0,"\u232B"].map(function(n,idx){
+            if(n==="")return <div key={idx}></div>;
+            return(<button key={idx} onClick={function(){
+              if(n==="\u232B"){setPin(pin.slice(0,-1));}
+              else if(pin.length<4){var np=pin+n;setPin(np);if(np.length===4)onComplete(np);}
+            }} style={{width:"100%",padding:"16px 0",borderRadius:12,border:"none",background:n==="\u232B"?"rgba(255,255,255,0.1)":"rgba(255,255,255,0.22)",color:"#fff",fontSize:24,fontWeight:700,cursor:"pointer"}}>{n}</button>);
+          })}
+        </div>
+        {msg?<p style={{color:"#EF9A9A",marginTop:16,fontSize:16,fontWeight:600}}>{msg}</p>:null}
+        <button onClick={onBack} style={{marginTop:24,padding:"12px 32px",borderRadius:10,border:"2px solid #A5D6A7",background:"transparent",color:"#A5D6A7",fontSize:16,fontWeight:600,cursor:"pointer"}}>{"\u2190"} 戻る</button>
+      </div>
+    );
+  }
+
+  var greenBg={minHeight:"100vh",background:"linear-gradient(160deg,#1B5E20,#388E3C)",display:"flex",flexDirection:"column",alignItems:"center",padding:"40px 20px 20px"};
+
+  // === ユーザー選択 ===
+  if(page==="select"){
+    return(
+      <div style={greenBg}>
+        <div style={{fontSize:13,color:"#A5D6A7",letterSpacing:3,marginBottom:8}}>MAKIBA FACTORY</div>
+        <h1 style={{fontSize:32,fontWeight:900,color:"#fff",marginBottom:4}}>薪 工 場</h1>
+        <p style={{fontSize:16,color:"#C8E6C9",marginBottom:40}}>出退勤管理</p>
+        <div style={{width:"100%",maxWidth:400}}>
+          <p style={{color:"#E8F5E9",fontSize:16,marginBottom:16,textAlign:"center",fontWeight:600}}>名前を選んでください</p>
+          {MEMBERS.map(function(m){
+            return(<button key={m.id} onClick={function(){setSelUser(m);setPin("");setPage("pin");}} style={{width:"100%",padding:"20px 24px",marginBottom:10,borderRadius:14,border:"none",background:"rgba(255,255,255,0.18)",color:"#fff",fontSize:22,fontWeight:800,cursor:"pointer",textAlign:"center",letterSpacing:2}}>{m.name}</button>);
+          })}
+          <button onClick={function(){setPage("admin_pin");setPin("");setMsg(null);}} style={{width:"100%",padding:"14px",marginTop:20,borderRadius:10,border:"2px solid #A5D6A7",background:"transparent",color:"#A5D6A7",fontSize:14,fontWeight:600,cursor:"pointer"}}>{"\u{1F512}"} 管理者ログイン</button>
+        </div>
+      </div>
+    );
+  }
+
+  // === PIN入力 ===
+  if(page==="pin"&&selUser){
+    return(
+      <div style={greenBg}>
+        <p style={{color:"#fff",fontSize:22,fontWeight:800,marginBottom:4}}>{selUser.name} さん</p>
+        <p style={{color:"#C8E6C9",fontSize:16,marginBottom:24}}>4桁の暗証番号を入力</p>
+        {pinPad(function(np){
+          if(np===selUser.pin){login(selUser);}
+          else{setPin("");setMsg("暗証番号が違います");setTimeout(function(){setMsg(null);},2000);}
+        },function(){setSelUser(null);setPin("");setMsg(null);setPage("select");})}
+      </div>
+    );
+  }
+
+  // === 管理者PIN ===
+  if(page==="admin_pin"){
+    return(
+      <div style={Object.assign({},greenBg,{justifyContent:"center"})}>
+        <h2 style={{color:"#fff",fontSize:24,fontWeight:800,marginBottom:8}}>{"\u{1F512}"} 管理者ログイン</h2>
+        <p style={{color:"#C8E6C9",fontSize:14,marginBottom:24}}>管理者PINを入力</p>
+        {pinPad(function(np){
+          if(np==="0000"){setPage("admin");loadAll();setPin("");}
+          else{setPin("");setMsg("PINが違います");setTimeout(function(){setMsg(null);},2000);}
+        },function(){setPage("select");setPin("");setMsg(null);})}
+      </div>
+    );
+  }
+
+  // === 管理者ダッシュボード ===
+  if(page==="admin"){
+    var byM={};MEMBERS.forEach(function(m){byM[m.id]=[];});
+    allSt.forEach(function(s){if(byM[s.userId])byM[s.userId].push(s);});
+    return(
+      <div style={{minHeight:"100vh",background:"#ECEFF1"}}>
+        <div style={{background:"linear-gradient(135deg,#1B5E20,#2E7D32)",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:11,color:"#A5D6A7",letterSpacing:2}}>MAKIBA FACTORY</div>
+            <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{"\u{1F512}"} 管理者画面</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'Courier New',monospace"}}>{fmtTime(now)}</div>
+            <div style={{fontSize:12,color:"#C8E6C9"}}>{fmtDate(now)}</div>
+          </div>
+        </div>
+        <div style={{padding:16}}>
+          <h2 style={{fontSize:18,fontWeight:700,color:"#333",marginBottom:12}}>今日の打刻一覧 ({fmtDate(now)})</h2>
+          {MEMBERS.map(function(m){
+            var ms=byM[m.id]||[];
+            return(
+              <div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}>
+                <div style={{background:"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700}}>{m.name} ({ms.length}件)</div>
+                {ms.length===0?(<div style={{padding:16,color:"#999",fontSize:14,textAlign:"center"}}>打刻なし</div>):(
+                  <div>{ms.map(function(s,i){
+                    return(<div key={i} style={{padding:"10px 16px",borderBottom:i<ms.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:18}}>{s.icon||""}</span>
+                        <span style={{fontSize:14,fontWeight:600}}>{s.label}</span>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:16,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div>
+                        {s.gpsLat?<div style={{fontSize:9,color:"#999"}}>{"\u{1F4CD}"}{s.gpsLat.toFixed(3)},{s.gpsLng.toFixed(3)}</div>:null}
+                      </div>
+                    </div>);
+                  })}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{padding:"0 16px 40px",textAlign:"center"}}>
+          <button onClick={function(){setPage("select");setPin("");}} style={{padding:"14px 40px",borderRadius:10,border:"2px solid #bbb",background:"#fff",color:"#666",fontSize:16,fontWeight:600,cursor:"pointer"}}>ログアウト</button>
+        </div>
+      </div>
+    );
+  }
+
+  // === メイン打刻画面 ===
+  return(
+    <div style={{minHeight:"100vh",background:"#ECEFF1"}}>
+      <div style={{background:"linear-gradient(135deg,#1B5E20,#2E7D32)",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:11,color:"#A5D6A7",letterSpacing:2}}>MAKIBA FACTORY</div>
+          <div style={{fontSize:20,fontWeight:800,color:"#fff",letterSpacing:1}}>{user?user.name:""}</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:28,fontWeight:900,color:"#fff",fontFamily:"'Courier New',monospace"}}>{fmtTime(now)}</div>
+          <div style={{fontSize:12,color:"#C8E6C9"}}>{fmtDate(now)}</div>
+        </div>
+      </div>
+      <div style={{padding:"6px 20px",background:gps?"#E8F5E9":"#FFF3E0",fontSize:12,color:gps?"#2E7D32":"#E65100"}}>
+        {gps?"\u{1F4CD} GPS OK ("+gps.lat.toFixed(4)+", "+gps.lng.toFixed(4)+")":"\u{1F4CD} GPS 取得中..."}
+      </div>
+      {msg?<div style={{padding:"14px 20px",background:"#1B5E20",color:"#fff",fontSize:18,fontWeight:700,textAlign:"center",letterSpacing:1}}>{"\u2713"} {msg}</div>:null}
+      {cnf?(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:20}}>
+        <div style={{background:"#fff",borderRadius:20,padding:"32px 24px",maxWidth:360,width:"100%",textAlign:"center"}}>
+          <div style={{fontSize:48,marginBottom:12}}>{cnf.icon}</div>
+          <div style={{fontSize:24,fontWeight:800,color:"#333",marginBottom:8}}>{cnf.label}</div>
+          <div style={{fontSize:16,color:"#666",marginBottom:24}}>を記録しますか？</div>
+          <div style={{display:"flex",gap:12}}>
+            <button onClick={function(){setCnf(null);}} style={{flex:1,padding:"16px",borderRadius:12,border:"2px solid #ccc",background:"#fff",color:"#666",fontSize:18,fontWeight:700,cursor:"pointer"}}>キャンセル</button>
+            <button onClick={function(){doStamp(cnf);}} style={{flex:1,padding:"16px",borderRadius:12,border:"none",background:cnf.color,color:"#fff",fontSize:18,fontWeight:700,cursor:"pointer"}}>OK</button>
+          </div>
+        </div>
+      </div>):null}
+      <div style={{padding:"16px 16px 8px"}}>
+        {ACTIONS.map(function(a){
+          return(<button key={a.id} onClick={function(){setCnf(a);}} style={{width:"100%",padding:"22px 20px",marginBottom:10,borderRadius:16,border:"none",background:a.color,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:16,boxShadow:"0 3px 10px rgba(0,0,0,0.25)"}}>
+            <span style={{fontSize:40,lineHeight:1,width:50,textAlign:"center"}}>{a.icon}</span>
+            <span style={{fontSize:24,fontWeight:900,letterSpacing:2,flex:1,textAlign:"center"}}>{a.label}</span>
+          </button>);
+        })}
+      </div>
+      <div style={{padding:"8px 16px 20px"}}>
+        <h3 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:10}}>今日の記録 ({stamps.length}件)</h3>
+        {stamps.length===0?(<div style={{padding:24,textAlign:"center",color:"#999",fontSize:16,background:"#fff",borderRadius:12}}>まだ記録がありません</div>):(
+          <div style={{background:"#fff",borderRadius:12,overflow:"hidden"}}>
+            {stamps.map(function(s,i){
+              var act=null;for(var j=0;j<ACTIONS.length;j++){if(ACTIONS[j].id===s.action)act=ACTIONS[j];}
+              return(<div key={i} style={{padding:"14px 16px",borderBottom:i<stamps.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <span style={{fontSize:20}}>{act?act.icon:""}</span>
+                  <span style={{fontSize:16,fontWeight:700}}>{s.label}</span>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:20,fontWeight:800,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div>
+                  {s.gpsLat?<div style={{fontSize:10,color:"#999"}}>{"\u{1F4CD}"}{s.gpsLat.toFixed(3)},{s.gpsLng.toFixed(3)}</div>:null}
+                </div>
+              </div>);
+            })}
+          </div>
+        )}
+      </div>
+      <div style={{padding:"0 16px 40px",textAlign:"center"}}>
+        <button onClick={logout} style={{padding:"14px 40px",borderRadius:10,border:"2px solid #bbb",background:"#fff",color:"#666",fontSize:16,fontWeight:600,cursor:"pointer"}}>ログアウト</button>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
