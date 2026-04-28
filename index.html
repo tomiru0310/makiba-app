@@ -123,30 +123,53 @@ function generateShift(y,m,offByM,ignOffByM){
       if(!aHC){var cH=WORKERS.filter(function(m3){return m3.combo&&days[ad].att.indexOf(m3.id)<0;});if(cH.length>0){days[ad].att.push(cH[0].id);days[ad].forced.push(cH[0].name+"(準中型等)");need--;}}}
     ws=we+1;
   }
-  // 着火割り当て(着火休みを考慮)
+  // 着火割り当て(着火休みを考慮+具志堅ピンチヒッター)
   for(var d3=0;d3<days.length;d3++){
     var dd3=days[d3];var w3=dd3.dow;
-    var nG=G_DAYS.indexOf(w3)>=0;var nM=M_DAYS.indexOf(w3)>=0;
+    var nG=G_DAYS.indexOf(w3)>=0;
+    var nM=M_DAYS.indexOf(w3)>=0;
     var gi=null,mi=null;
+    var gushiOff=ignOffByM["gushiken"]||[];
+    var gushiAvail=gushiOff.indexOf(dd3.day)<0;
     if(nG){
+      // 1. 通常担当者を探す
       for(var ii=0;ii<MEMBERS.length;ii++){
         var ig=MEMBERS[ii];
         if(ig.gDays.indexOf(w3)>=0){
           var ioff=ignOffByM[ig.id]||[];
-          if(ioff.indexOf(dd3.day)<0){gi=ig.id;break;}
+          if(ioff.indexOf(dd3.day)<0){
+            gi=ig.id;break;
+          }
         }
       }
-      if(!gi&&dd3.att.length>0)gi=dd3.att.indexOf("tomioka")>=0?"tomioka":dd3.att[0];
+      // 2. 見つからなければ具志堅ピンチヒッター
+      if(!gi&&gushiAvail){gi="gushiken";}
+      // 3. 具志堅もダメなら出勤者から
+      if(!gi&&dd3.att.length>0){
+        gi=dd3.att.indexOf("tomioka")>=0
+          ?"tomioka":dd3.att[0];
+      }
     }
     if(nM){
       for(var jj=0;jj<MEMBERS.length;jj++){
         var ig2=MEMBERS[jj];
         if(ig2.mDays.indexOf(w3)>=0){
           var ioff2=ignOffByM[ig2.id]||[];
-          if(ioff2.indexOf(dd3.day)<0){mi=ig2.id;break;}
+          if(ioff2.indexOf(dd3.day)<0){
+            mi=ig2.id;break;
+          }
         }
       }
-      if(!mi&&dd3.att.length>0){var fb=dd3.att.filter(function(x){return x!==gi;});mi=fb.length>0?fb[0]:dd3.att[0];}
+      // 具志堅ピンチヒッター(黄金泉と別人の場合)
+      if(!mi&&gushiAvail&&gi!=="gushiken"){
+        mi="gushiken";
+      }
+      if(!mi&&dd3.att.length>0){
+        var fb=dd3.att.filter(function(x){
+          return x!==gi;
+        });
+        mi=fb.length>0?fb[0]:dd3.att[0];
+      }
     }
     var salary=dd3.att.filter(function(id){var m4=findMember(id);return m4.type==="salary";});
     var part=dd3.att.filter(function(id){var m4=findMember(id);return m4.type==="part";});
@@ -487,7 +510,7 @@ function App(){
     var igLabel="";
     if(user){
       if(user.id==="gushiken"){
-        igLabel="担当:月水 + ピンチヒッター全日";
+        igLabel="行けない日を入力してください";
       }else{
         var parts=[];
         if(user.gDays&&user.gDays.length>0)parts.push("黄金泉:"+user.gDays.map(function(d){return DJ[d];}).join(""));
