@@ -384,7 +384,10 @@ function App(){
           <h2 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:12}}>{nxM.year}年{nxM.month}月の休み登録</h2>
           {MEMBERS.map(function(m){
             var wOff=offByM[m.id]||[];var iOff=ignOffByM[m.id]||[];
-            var hasWork=m.workDays.length>0;var hasIgn=getIgniteDays(m).length>0;
+            var hasWork=m.workDays.length>0;
+            var hasIgn=getIgniteDays(m).length>0;
+            // 具志堅はピンチヒッターなので常に着火あり扱い
+            if(m.id==="gushiken")hasIgn=true;
             if(!hasWork&&!hasIgn)return null;
             return(<div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}>
               <div style={{background:m.type==="ignite"?"#E65100":"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700}}>{m.name}</div>
@@ -476,13 +479,21 @@ function App(){
   if(showOff){
     var hasWork=user&&user.workDays&&user.workDays.length>0;
     var igDays=user?getIgniteDays(user):[];
+    // 具志堅はピンチヒッターなので全日表示
+    if(user&&user.id==="gushiken"){
+      igDays=[0,1,2,3,4,5,6];
+    }
     var hasIgn=igDays.length>0;
     var igLabel="";
     if(user){
-      var parts=[];
-      if(user.gDays&&user.gDays.length>0)parts.push("黄金泉:"+user.gDays.map(function(d){return DJ[d];}).join(""));
-      if(user.mDays&&user.mDays.length>0)parts.push("元湯:"+user.mDays.map(function(d){return DJ[d];}).join(""));
-      igLabel=parts.join(" / ");
+      if(user.id==="gushiken"){
+        igLabel="担当:月水 + ピンチヒッター全日";
+      }else{
+        var parts=[];
+        if(user.gDays&&user.gDays.length>0)parts.push("黄金泉:"+user.gDays.map(function(d){return DJ[d];}).join(""));
+        if(user.mDays&&user.mDays.length>0)parts.push("元湯:"+user.mDays.map(function(d){return DJ[d];}).join(""));
+        igLabel=parts.join(" / ");
+      }
     }
     return(<div style={{minHeight:"100vh",background:"#ECEFF1",padding:16}}>
       <div style={{background:"#fff",borderRadius:16,padding:20,maxWidth:420,margin:"0 auto",boxShadow:"0 4px 20px rgba(0,0,0,0.1)"}}>
