@@ -149,54 +149,105 @@ function generateShift(y,m,offByM,ignOffByM){
     ws=we+1;
   }
   // 5. 着火割り当て
-  // 具志堅は黄金泉・元湯どちらもOK
-  // 通常担当→具志堅ピンチヒッター→出勤者から
+  // □元をまとめる + 浜辺・神原・具志堅で均等分散
+  // 富岡・半田は固定曜日パターン
+  var ignCount={};
+  MEMBERS.forEach(function(m2){ignCount[m2.id]=0;});
+  var distIds=["hamabe","kambara","gushiken"];
+
   for(var d3=0;d3<days.length;d3++){
     var dd3=days[d3];var w3=dd3.dow;
     var nG=G_DAYS.indexOf(w3)>=0;
     var nM=M_DAYS.indexOf(w3)>=0;
     var gi=null,mi=null;
-    var gushiOff=ignOffByM["gushiken"]||[];
-    var gushiAvail=gushiOff.indexOf(dd3.day)<0;
-    // 黄金泉
-    if(nG){
-      for(var ii=0;ii<MEMBERS.length;ii++){
-        var ig=MEMBERS[ii];
-        if(ig.gDays.indexOf(w3)>=0){
-          var ioff=ignOffByM[ig.id]||[];
-          if(ioff.indexOf(dd3.day)<0){
-            gi=ig.id;break;
-          }
+
+    // 空き判定
+    var avMap={};
+    MEMBERS.forEach(function(m3){
+      var ioff3=ignOffByM[m3.id]||[];
+      avMap[m3.id]=ioff3.indexOf(dd3.day)<0;
+    });
+
+    // 富岡・半田の固定曜日チェック
+    var tomFM=findMember("tomioka");
+    var hanFM=findMember("handa");
+    var tomiG=nG&&tomFM.gDays.indexOf(w3)>=0
+      &&avMap["tomioka"];
+    var tomiM=nM&&tomFM.mDays.indexOf(w3)>=0
+      &&avMap["tomioka"];
+    var handaM=nM&&hanFM.mDays.indexOf(w3)>=0
+      &&avMap["handa"];
+
+    // 富岡・半田の固定割り当て
+    if(tomiG) gi="tomioka";
+    if(tomiM) mi="tomioka";
+    if(handaM&&!mi) mi="handa";
+
+    // 分散3人の空きを着火回数少ない順にソート
+    var availD=distIds.filter(function(id2){
+      return avMap[id2];
+    });
+    availD.sort(function(a2,b2){
+      return ignCount[a2]-ignCount[b2];
+    });
+
+    if(nG&&nM){
+      // 両方必要な日
+      if(!gi&&!mi){
+        // 両方空き→1人で□元
+        if(availD.length>0){
+          gi=availD[0];mi=availD[0];
         }
+      }else if(gi&&!mi){
+        // 黄金泉は決定(富岡)→元湯を分散
+        if(availD.length>0){
+          mi=availD[0];
+        }
+      }else if(!gi&&mi){
+        // 元湯は決定→黄金泉を分散
+        // miが分散メンバーなら□元にまとめる
+        if(distIds.indexOf(mi)>=0){
+          gi=mi;
+        }else if(availD.length>0){
+          gi=availD[0];
+        }
+      }else{
+        // 両方決定済み(富岡□元等)→何もしない
       }
-      if(!gi&&gushiAvail) gi="gushiken";
-      if(!gi&&dd3.att.length>0){
-        gi=dd3.att.indexOf("tomioka")>=0
-          ?"tomioka":dd3.att[0];
+      // giとmiが別の分散メンバーの場合
+      // →1人で□元にまとめてもう1人の負担を減らす
+      if(gi&&mi&&gi!==mi
+        &&distIds.indexOf(gi)>=0
+        &&distIds.indexOf(mi)>=0){
+        // 少ない方に□元をまとめる
+        var fewer=ignCount[gi]<=ignCount[mi]
+          ?gi:mi;
+        gi=fewer;mi=fewer;
+      }
+    }else if(nG&&!nM){
+      if(!gi){
+        if(availD.length>0) gi=availD[0];
+      }
+    }else if(!nG&&nM){
+      if(!mi){
+        if(availD.length>0) mi=availD[0];
       }
     }
-    // 元湯
-    if(nM){
-      for(var jj=0;jj<MEMBERS.length;jj++){
-        var ig2=MEMBERS[jj];
-        if(ig2.mDays.indexOf(w3)>=0){
-          var ioff2=ignOffByM[ig2.id]||[];
-          if(ioff2.indexOf(dd3.day)<0){
-            mi=ig2.id;break;
-          }
-        }
-      }
-      // 具志堅ピンチヒッター(元湯もOK、黄金泉と同時もOK)
-      if(!mi&&gushiAvail){
-        mi="gushiken";
-      }
-      if(!mi&&dd3.att.length>0){
-        var fb=dd3.att.filter(function(x){
-          return x!==gi;
-        });
-        mi=fb.length>0?fb[0]:dd3.att[0];
-      }
+
+    // フォールバック: 出勤者から
+    if(nG&&!gi&&dd3.att.length>0){
+      gi=dd3.att[0];
     }
+    if(nM&&!mi&&dd3.att.length>0){
+      var fb2=dd3.att.filter(function(x2){
+        return x2!==gi;
+      });
+      mi=fb2.length>0?fb2[0]:dd3.att[0];
+    }
+
+    // カウント更新
+    if(gi) ignCount[gi]++;
+    if(mi&&mi!==gi) ignCount[mi]++;
     // 投入: 社員優先
     var salary=dd3.att.filter(function(id){
       var m4=findMember(id);
