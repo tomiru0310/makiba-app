@@ -472,6 +472,31 @@ function App(){
     var nd3=shiftData.map(function(d,i){if(i!==di)return d;var na=d.att.slice();var idx=na.indexOf(mid);if(idx>=0)na.splice(idx,1);else na.push(mid);return Object.assign({},d,{att:na});});
     setShiftData(nd3);setSavedShift(null);
   }
+  function chgIgnite(di,colId,val){
+    if(!shiftData)return;
+    var nd3=shiftData.map(function(d,i){
+      if(i!==di)return d;
+      var u=Object.assign({},d);
+      var newGi=u.gi;var newMi=u.mi;
+      // 既存の割り当てを解除
+      if(u.gi===colId)newGi=null;
+      if(u.mi===colId)newMi=null;
+      if(u.gi===u.mi&&u.gi===colId){
+        newGi=null;newMi=null;
+      }
+      // 新しい値を設定
+      if(val==="□")newGi=colId;
+      else if(val==="元")newMi=colId;
+      else if(val==="□元"){newGi=colId;newMi=colId;}
+      u.gi=newGi;u.mi=newMi;
+      if(u.gi&&u.mi)u.lbl="□元";
+      else if(u.gi)u.lbl="□";
+      else if(u.mi)u.lbl="元";
+      else u.lbl="";
+      return u;
+    });
+    setShiftData(nd3);setSavedShift(null);
+  }
 
   function pinPad(onComplete,onBack){
     return(<div style={{textAlign:"center"}}>
@@ -575,7 +600,7 @@ function App(){
               var link=document.createElement("a");link.download="着火シフト_"+nxM.year+"年"+nxM.month+"月.png";link.href=canvas.toDataURL("image/png");link.click();
             }} style={{padding:"6px 16px",borderRadius:8,border:"none",background:"#1565c0",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>{"\u{1F4F7}"} 画像保存</button></div>
               <table style={{borderCollapse:"collapse",width:"100%",fontSize:11}}><thead><tr><th style={{padding:"6px",background:"#2E7D32",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>日</th><th style={{padding:"6px",background:"#2E7D32",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>曜</th><th style={{padding:"6px",background:"#1565c0",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>浜辺</th><th style={{padding:"6px",background:"#43A047",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>神原</th><th style={{padding:"6px",background:"#00ACC1",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>トミル</th><th style={{padding:"6px",background:"#FDD835",color:"#333",fontSize:10,border:"1px solid #ccc"}}>具志堅</th><th style={{padding:"6px",background:"#E65100",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>半田</th></tr></thead>
-              <tbody>{displayShift.map(function(d){var igMap={};if(d.gi&&d.mi&&d.gi===d.mi)igMap[d.gi]="□元";else{if(d.gi)igMap[d.gi]="□";if(d.mi)igMap[d.mi]="元";}var cols=["hamabe","kambara","tomioka","gushiken","handa"];var bgs=["#D6EAF8","#D5F5E3","#D1F2EB","#FEF9E7","#FDEBD0"];return(<tr key={d.day}><td style={{padding:"4px 6px",border:"1px solid #ddd",background:"#E8F5E9",textAlign:"center",fontSize:11,fontWeight:600}}>{nxM.month}/{d.day}</td><td style={{padding:"4px",border:"1px solid #ddd",background:"#E8F5E9",textAlign:"center",fontSize:11,fontWeight:700,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>{cols.map(function(id,ci){return(<td key={id} style={{padding:"4px",border:"1px solid #ddd",background:bgs[ci],textAlign:"center",fontSize:12,fontWeight:700}}>{igMap[id]||""}</td>);})}</tr>);})}</tbody></table></div>
+              <tbody>{displayShift.map(function(d,di){var igMap={};if(d.gi&&d.mi&&d.gi===d.mi)igMap[d.gi]="□元";else{if(d.gi)igMap[d.gi]="□";if(d.mi)igMap[d.mi]="元";}var cols=["hamabe","kambara","tomioka","gushiken","handa"];var bgs=["#D6EAF8","#D5F5E3","#D1F2EB","#FEF9E7","#FDEBD0"];return(<tr key={d.day}><td style={{padding:"4px 6px",border:"1px solid #ddd",background:"#E8F5E9",textAlign:"center",fontSize:11,fontWeight:600}}>{nxM.month}/{d.day}</td><td style={{padding:"4px",border:"1px solid #ddd",background:"#E8F5E9",textAlign:"center",fontSize:11,fontWeight:700,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>{cols.map(function(id,ci){var val=igMap[id]||"";return(<td key={id} style={{padding:"2px",border:"1px solid #ddd",background:bgs[ci],textAlign:"center"}}>{shiftData?<select value={val} onChange={function(e){chgIgnite(di,id,e.target.value);}} style={{border:"none",background:"transparent",fontSize:12,fontWeight:700,textAlign:"center",width:"100%",cursor:"pointer",color:"#333"}}><option value=""></option><option value="□">□</option><option value="元">元</option><option value="□元">□元</option></select>:<span style={{fontSize:12,fontWeight:700}}>{val}</span>}</td>);})}</tr>);})}</tbody></table></div>
           </div>):<div style={{background:"#fff",borderRadius:12,padding:32,textAlign:"center",color:"#999"}}>「シフト自動生成」ボタンを押してください</div>}
         </div>):null}
       </div>
