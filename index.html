@@ -211,14 +211,61 @@ function App(){
   useEffect(function(){var t=setInterval(function(){setNow(new Date());},1000);return function(){clearInterval(t);};},[]);
   var nxM=nextMonth();
 
+  // リスナー管理
+  var _unsubs = useState([]);
+  var unsubs = _unsubs[0], setUnsubs = _unsubs[1];
+
+  function clearListeners() {
+    for (var i = 0; i < unsubs.length; i++) {
+      if (typeof unsubs[i] === "function") unsubs[i]();
+    }
+    setUnsubs([]);
+  }
+
   function loadMy(uid){
-    db.collection("stamps").where("userId","==",uid).where("dateKey","==",todayKey()).orderBy("time","desc")
-      .onSnapshot(function(snap){var a=[];snap.forEach(function(doc){a.push(doc.data());});setStamps(a);});
+    clearListeners();
+    var newUnsubs = [];
     var mk=mkKey(nxM.year,nxM.month);
-    db.collection("offdays").where("userId","==",uid).where("monthKey","==",mk)
-      .onSnapshot(function(snap){var a=[];snap.forEach(function(doc){var d=doc.data();if(d.days)a=d.days;});setOffDays(a);});
-    db.collection("igniteoff").where("userId","==",uid).where("monthKey","==",mk)
-      .onSnapshot(function(snap){var a=[];snap.forEach(function(doc){var d=doc.data();if(d.days)a=d.days;});setIgnOffDays(a);});
+    newUnsubs.push(
+      db.collection("stamps")
+        .where("userId","==",uid)
+        .where("dateKey","==",todayKey())
+        .orderBy("time","desc")
+        .onSnapshot(function(snap){
+          var a=[];
+          snap.forEach(function(doc){
+            a.push(doc.data());
+          });
+          setStamps(a);
+        })
+    );
+    newUnsubs.push(
+      db.collection("offdays")
+        .where("userId","==",uid)
+        .where("monthKey","==",mk)
+        .onSnapshot(function(snap){
+          var a=[];
+          snap.forEach(function(doc){
+            var d=doc.data();
+            if(d.days) a=d.days;
+          });
+          setOffDays(a);
+        })
+    );
+    newUnsubs.push(
+      db.collection("igniteoff")
+        .where("userId","==",uid)
+        .where("monthKey","==",mk)
+        .onSnapshot(function(snap){
+          var a=[];
+          snap.forEach(function(doc){
+            var d=doc.data();
+            if(d.days) a=d.days;
+          });
+          setIgnOffDays(a);
+        })
+    );
+    setUnsubs(newUnsubs);
   }
   function loadAll(){
     db.collection("stamps").where("dateKey","==",todayKey()).orderBy("time","desc")
@@ -233,8 +280,18 @@ function App(){
     db.collection("shifts").doc(mk).get().then(function(doc){if(doc.exists)setSavedShift(doc.data().days);});
   }
   function getGps(){if(navigator.geolocation)navigator.geolocation.getCurrentPosition(function(p){setGps({lat:p.coords.latitude,lng:p.coords.longitude});},function(){setGps(null);});}
-  function login(m){setUser(m);loadMy(m.id);setPage("main");setMsg(null);getGps();}
-  function logout(){setUser(null);setStamps([]);setPage("select");setPin("");setSelUser(null);setCnf(null);setShowDiary(false);setShowOff(false);}
+  function login(m){
+    setUser(m);loadMy(m.id);
+    setPage("main");setMsg(null);getGps();
+  }
+  function logout(){
+    clearListeners();
+    setUser(null);setStamps([]);
+    setOffDays([]);setIgnOffDays([]);
+    setPage("select");setPin("");
+    setSelUser(null);setCnf(null);
+    setShowDiary(false);setShowOff(false);
+  }
   function doStamp(a){
     var t=new Date();
     db.collection("stamps").add({userId:user.id,userName:user.name,action:a.id,label:a.label,icon:a.icon,time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null});
