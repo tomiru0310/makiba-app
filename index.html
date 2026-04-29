@@ -64,19 +64,168 @@ function getIgniteDays(m){var all=[];(m.gDays||[]).forEach(function(d){if(all.in
 
 function generateShift(y,m,offByM,ignOffByM){
   var nd=dim(y,m);var days=[];var s2=getNth(y,m,2,2);
-  for(var d=1;d<=nd;d++){var w=doW(y,m,d);var att=[];for(var i=0;i<WORKERS.length;i++){var mb=WORKERS[i];var sched=mb.workDays.indexOf(w)>=0;if(mb.id==="hamabe"&&!sched&&d===s2)sched=true;var off=offByM[mb.id]||[];if(sched&&off.indexOf(d)<0)att.push(mb.id);}days.push({day:d,dow:w,att:att,forced:[]});}
-  for(var d2=0;d2<days.length;d2++){var dd=days[d2];var hF=false;for(var fi=0;fi<dd.att.length;fi++){var wm=findMember(dd.att[fi]);if(wm.fork)hF=true;}if(!hF){var fH=WORKERS.filter(function(m2){return m2.fork&&dd.att.indexOf(m2.id)<0;});if(fH.length>0){dd.att.push(fH[0].id);dd.forced.push(fH[0].name+"(フォーク)");}}}
-  var ws=0;while(ws<days.length){var we=ws;for(var k=ws;k<days.length;k++){we=k;if(k>ws&&days[k].dow===1){we=k-1;break;}if(k===days.length-1)break;}var cD=0;for(var cd=ws;cd<=we;cd++){for(var ci=0;ci<days[cd].att.length;ci++){var cwm=findMember(days[cd].att[ci]);if(cwm.combo){cD++;break;}}}var need=3-cD;for(var ad=ws;ad<=we&&need>0;ad++){var aHC=false;for(var aci=0;aci<days[ad].att.length;aci++){var acwm=findMember(days[ad].att[aci]);if(acwm.combo)aHC=true;}if(!aHC){var cH=WORKERS.filter(function(m3){return m3.combo&&days[ad].att.indexOf(m3.id)<0;});if(cH.length>0){days[ad].att.push(cH[0].id);days[ad].forced.push(cH[0].name+"(準中型等)");need--;}}}ws=we+1;}
+  // 1. 通常メンバーの出勤日を決定
+  for(var d=1;d<=nd;d++){
+    var w=doW(y,m,d);var att=[];
+    for(var i=0;i<WORKERS.length;i++){
+      var mb=WORKERS[i];
+      var sched=mb.workDays.indexOf(w)>=0;
+      if(mb.id==="hamabe"&&!sched&&d===s2) sched=true;
+      var off=offByM[mb.id]||[];
+      if(sched&&off.indexOf(d)<0) att.push(mb.id);
+    }
+    days.push({day:d,dow:w,att:att,forced:[]});
+  }
+  // 2. 出勤者ゼロの日→社員(浜辺)優先、次に具志堅
+  for(var d1b=0;d1b<days.length;d1b++){
+    var dd1=days[d1b];
+    if(dd1.att.length===0){
+      // 浜辺が空いているか(社員優先)
+      var hamOff=offByM["hamabe"]||[];
+      if(hamOff.indexOf(dd1.day)<0){
+        dd1.att.push("hamabe");
+        dd1.forced.push("浜辺(出勤者ゼロ)");
+      }else{
+        // 具志堅が空いているか
+        var gushiWorkOff=ignOffByM["gushiken"]||[];
+        if(gushiWorkOff.indexOf(dd1.day)<0){
+          dd1.att.push("gushiken");
+          dd1.forced.push("具志堅(出勤者ゼロ)");
+        }
+      }
+    }
+  }
+  // 3. フォーク制約
+  for(var d2=0;d2<days.length;d2++){
+    var dd=days[d2];var hF=false;
+    for(var fi=0;fi<dd.att.length;fi++){
+      var wm=findMember(dd.att[fi]);
+      if(wm.fork) hF=true;
+    }
+    if(!hF){
+      var fH=WORKERS.filter(function(m2){
+        return m2.fork&&dd.att.indexOf(m2.id)<0;
+      });
+      if(fH.length>0){
+        dd.att.push(fH[0].id);
+        dd.forced.push(fH[0].name+"(フォーク)");
+      }
+    }
+  }
+  // 4. コンボ制約(週3)
+  var ws=0;
+  while(ws<days.length){
+    var we=ws;
+    for(var k=ws;k<days.length;k++){
+      we=k;
+      if(k>ws&&days[k].dow===1){we=k-1;break;}
+      if(k===days.length-1) break;
+    }
+    var cD=0;
+    for(var cd=ws;cd<=we;cd++){
+      for(var ci=0;ci<days[cd].att.length;ci++){
+        var cwm=findMember(days[cd].att[ci]);
+        if(cwm.combo){cD++;break;}
+      }
+    }
+    var need=3-cD;
+    for(var ad=ws;ad<=we&&need>0;ad++){
+      var aHC=false;
+      for(var aci=0;aci<days[ad].att.length;aci++){
+        var acwm=findMember(days[ad].att[aci]);
+        if(acwm.combo) aHC=true;
+      }
+      if(!aHC){
+        var cH=WORKERS.filter(function(m3){
+          return m3.combo&&days[ad].att.indexOf(m3.id)<0;
+        });
+        if(cH.length>0){
+          days[ad].att.push(cH[0].id);
+          days[ad].forced.push(cH[0].name+"(準中型等)");
+          need--;
+        }
+      }
+    }
+    ws=we+1;
+  }
+  // 5. 着火割り当て
+  // 具志堅は黄金泉・元湯どちらもOK
+  // 通常担当→具志堅ピンチヒッター→出勤者から
   for(var d3=0;d3<days.length;d3++){
-    var dd3=days[d3];var w3=dd3.dow;var nG=G_DAYS.indexOf(w3)>=0;var nM=M_DAYS.indexOf(w3)>=0;var gi=null,mi=null;
-    var gushiOff=ignOffByM["gushiken"]||[];var gushiAvail=gushiOff.indexOf(dd3.day)<0;
-    if(nG){for(var ii=0;ii<MEMBERS.length;ii++){var ig=MEMBERS[ii];if(ig.gDays.indexOf(w3)>=0){var ioff=ignOffByM[ig.id]||[];if(ioff.indexOf(dd3.day)<0){gi=ig.id;break;}}}if(!gi&&gushiAvail){gi="gushiken";}if(!gi&&dd3.att.length>0)gi=dd3.att.indexOf("tomioka")>=0?"tomioka":dd3.att[0];}
-    if(nM){for(var jj=0;jj<MEMBERS.length;jj++){var ig2=MEMBERS[jj];if(ig2.mDays.indexOf(w3)>=0){var ioff2=ignOffByM[ig2.id]||[];if(ioff2.indexOf(dd3.day)<0){mi=ig2.id;break;}}}if(!mi&&gushiAvail&&gi!=="gushiken"){mi="gushiken";}if(!mi&&dd3.att.length>0){var fb=dd3.att.filter(function(x){return x!==gi;});mi=fb.length>0?fb[0]:dd3.att[0];}}
-    var salary=dd3.att.filter(function(id){var m4=findMember(id);return m4.type==="salary";});var part=dd3.att.filter(function(id){var m4=findMember(id);return m4.type==="part";});
-    var injArr=[];for(var si=0;si<4;si++){if(salary.length>0)injArr.push(salary[si%salary.length]);else if(part.length>0)injArr.push(part[si%part.length]);else injArr.push(null);}
-    var hasOT=false;if(injArr[3]){var w17=findMember(injArr[3]);if(w17.type==="part")hasOT=true;}
-    var lbl="";if(gi&&mi)lbl="□元";else if(gi)lbl="□";else if(mi)lbl="元";
-    dd3.gi=gi;dd3.mi=mi;dd3.lbl=lbl;dd3.nG=nG;dd3.nM=nM;dd3.injArr=injArr;dd3.hasOT=hasOT;
+    var dd3=days[d3];var w3=dd3.dow;
+    var nG=G_DAYS.indexOf(w3)>=0;
+    var nM=M_DAYS.indexOf(w3)>=0;
+    var gi=null,mi=null;
+    var gushiOff=ignOffByM["gushiken"]||[];
+    var gushiAvail=gushiOff.indexOf(dd3.day)<0;
+    // 黄金泉
+    if(nG){
+      for(var ii=0;ii<MEMBERS.length;ii++){
+        var ig=MEMBERS[ii];
+        if(ig.gDays.indexOf(w3)>=0){
+          var ioff=ignOffByM[ig.id]||[];
+          if(ioff.indexOf(dd3.day)<0){
+            gi=ig.id;break;
+          }
+        }
+      }
+      if(!gi&&gushiAvail) gi="gushiken";
+      if(!gi&&dd3.att.length>0){
+        gi=dd3.att.indexOf("tomioka")>=0
+          ?"tomioka":dd3.att[0];
+      }
+    }
+    // 元湯
+    if(nM){
+      for(var jj=0;jj<MEMBERS.length;jj++){
+        var ig2=MEMBERS[jj];
+        if(ig2.mDays.indexOf(w3)>=0){
+          var ioff2=ignOffByM[ig2.id]||[];
+          if(ioff2.indexOf(dd3.day)<0){
+            mi=ig2.id;break;
+          }
+        }
+      }
+      // 具志堅ピンチヒッター(元湯もOK、黄金泉と同時もOK)
+      if(!mi&&gushiAvail){
+        mi="gushiken";
+      }
+      if(!mi&&dd3.att.length>0){
+        var fb=dd3.att.filter(function(x){
+          return x!==gi;
+        });
+        mi=fb.length>0?fb[0]:dd3.att[0];
+      }
+    }
+    // 投入: 社員優先
+    var salary=dd3.att.filter(function(id){
+      var m4=findMember(id);
+      return m4.type==="salary";
+    });
+    var part=dd3.att.filter(function(id){
+      var m4=findMember(id);
+      return m4.type==="part";
+    });
+    var injArr=[];
+    for(var si=0;si<4;si++){
+      if(salary.length>0)
+        injArr.push(salary[si%salary.length]);
+      else if(part.length>0)
+        injArr.push(part[si%part.length]);
+      else injArr.push(null);
+    }
+    var hasOT=false;
+    if(injArr[3]){
+      var w17=findMember(injArr[3]);
+      if(w17.type==="part") hasOT=true;
+    }
+    var lbl="";
+    if(gi&&mi) lbl="□元";
+    else if(gi) lbl="□";
+    else if(mi) lbl="元";
+    dd3.gi=gi;dd3.mi=mi;dd3.lbl=lbl;
+    dd3.nG=nG;dd3.nM=nM;
+    dd3.injArr=injArr;dd3.hasOT=hasOT;
   }
   return days;
 }
