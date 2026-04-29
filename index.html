@@ -164,8 +164,15 @@ function generateShift(y,m,offByM,ignOffByM){
     // 空き判定
     var avMap={};
     MEMBERS.forEach(function(m3){
-      var ioff3=ignOffByM[m3.id]||[];
-      avMap[m3.id]=ioff3.indexOf(dd3.day)<0;
+      if(m3.id==="hamabe"){
+        // 浜辺は工場の休み=着火の休み
+        var woff=offByM["hamabe"]||[];
+        avMap[m3.id]=woff.indexOf(dd3.day)<0
+          &&m3.workDays.indexOf(w3)>=0;
+      }else{
+        var ioff3=ignOffByM[m3.id]||[];
+        avMap[m3.id]=ioff3.indexOf(dd3.day)<0;
+      }
     });
 
     // 富岡・半田の固定曜日チェック
