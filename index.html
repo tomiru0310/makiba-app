@@ -632,66 +632,111 @@ function App(){
       <div style={{padding:16}}>
         {adminTab==="stamps"?(<div><h2 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:12}}>今日の打刻・日誌</h2>
           {MEMBERS.map(function(m){var ms=byM[m.id]||[];var diary=diaryByM[m.id];
-            // 今日の投入回数
-            var injToday=0;
-            ms.forEach(function(s){if(s.action==="inject")injToday++;});
             return(<div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}><div style={{background:"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}><span>{m.name}</span><span style={{fontSize:12,opacity:0.8}}>{ms.length}件</span></div>{ms.length===0?<div style={{padding:16,color:"#999",fontSize:14,textAlign:"center"}}>打刻なし</div>:<div>{ms.map(function(s,i){return(<div key={i} style={{padding:"10px 16px",borderBottom:i<ms.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{s.icon||""}</span><span style={{fontSize:14,fontWeight:600}}>{s.label}</span></div><div style={{fontSize:16,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div></div>);})}</div>}
-              {injToday>0?<div style={{padding:"8px 16px",background:"#FFF8E1",borderTop:"1px solid #FFE082",display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:14}}>{"\u{1FAB5}"}</span><span style={{fontSize:13,fontWeight:700,color:"#E65100"}}>本日の投入: {injToday}回</span></div>:null}
               {diary?<div style={{padding:"10px 16px",background:"#F1F8E9",borderTop:"1px solid #C8E6C9"}}><div style={{fontSize:12,fontWeight:700,color:"#33691E",marginBottom:4}}>{"\u{1F4DD}"} 日誌</div><div style={{display:"flex",gap:16,fontSize:14}}><span><strong>{diary.racks}</strong> ラック</span><span><strong>{diary.bundles}</strong> 束</span><span><strong>{diary.delivers}</strong> 搬入</span></div>{diary.memo?<div style={{fontSize:12,color:"#555",marginTop:4}}>{"\u{1F4AC}"} {diary.memo}</div>:null}</div>:null}</div>);})}
 
+          {/* 今日の投入一覧 */}
+          {(function(){
+            var injList=allSt.filter(function(s){return s.action==="inject";}).sort(function(a,b){return a.time-b.time;});
+            if(injList.length===0)return null;
+            return(<div style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden",marginTop:20}}>
+              <div style={{background:"#1565C0",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}>
+                <span>{"\u{1FAB5}"} 今日の投入一覧</span>
+                <span style={{fontSize:14}}>計{injList.length}回</span>
+              </div>
+              <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
+                <thead><tr>
+                  <th style={{padding:"8px 12px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>回</th>
+                  <th style={{padding:"8px 12px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>時刻</th>
+                  <th style={{padding:"8px 12px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>担当</th>
+                </tr></thead>
+                <tbody>{injList.map(function(s,i){
+                  return(<tr key={i}>
+                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontWeight:600}}>{i+1}</td>
+                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontFamily:"'Courier New',monospace",fontWeight:700}}>{s.timeStr}</td>
+                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontWeight:600}}>{s.userName}</td>
+                  </tr>);
+                })}</tbody>
+              </table>
+            </div>);
+          })()}
+
           {/* 月間着火回数サマリー */}
-          <div style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden",marginTop:20}}>
-            <div style={{background:"#E65100",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700}}>{"\u{1F525}"} 今月の着火回数</div>
-            <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
-              <thead><tr>
-                <th style={{padding:"8px 12px",background:"#FBE9E7",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>名前</th>
-                <th style={{padding:"8px 12px",background:"#BBDEFB",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#1565c0"}}>黄金泉(□)</th>
-                <th style={{padding:"8px 12px",background:"#E8EAF6",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#5C6BC0"}}>黄金泉+元湯(□元)</th>
-                <th style={{padding:"8px 12px",background:"#FFF3E0",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#E65100"}}>元湯(元)</th>
-                <th style={{padding:"8px 12px",background:"#FFEBEE",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#C62828"}}>合計</th>
-              </tr></thead>
-              <tbody>{(function(){
-                // monthStから今月の着火データを集計
-                var igStats={};
-                MEMBERS.forEach(function(m){igStats[m.id]={golden:0,combo:0,motoyu:0};});
-                // □元は同日に両方着火した人を検出
-                var byDay={};
-                monthSt.forEach(function(s){
-                  if(s.action!=="ignite_golden"&&s.action!=="ignite_motoyu")return;
-                  var key=s.userId+"_"+s.dateKey;
-                  if(!byDay[key])byDay[key]={g:false,m:false,uid:s.userId};
-                  if(s.action==="ignite_golden")byDay[key].g=true;
-                  if(s.action==="ignite_motoyu")byDay[key].m=true;
-                });
-                // □元の日を集計し直す
-                var igFinal={};
-                MEMBERS.forEach(function(m){igFinal[m.id]={golden:0,combo:0,motoyu:0};});
-                Object.keys(byDay).forEach(function(k){
-                  var v=byDay[k];
-                  if(v.g&&v.m)igFinal[v.uid].combo++;
-                  else if(v.g)igFinal[v.uid].golden++;
-                  else if(v.m)igFinal[v.uid].motoyu++;
-                });
-                return MEMBERS.filter(function(m){
+          {(function(){
+            var byDay={};
+            monthSt.forEach(function(s){
+              if(s.action!=="ignite_golden"&&s.action!=="ignite_motoyu")return;
+              var key=s.userId+"_"+s.dateKey;
+              if(!byDay[key])byDay[key]={g:false,m:false,uid:s.userId};
+              if(s.action==="ignite_golden")byDay[key].g=true;
+              if(s.action==="ignite_motoyu")byDay[key].m=true;
+            });
+            // 手当計算用に分解集計
+            // 黄金泉回数 = □の日 + □元の日
+            // 元湯回数 = 元の日 + □元の日
+            var igFinal={};
+            MEMBERS.forEach(function(m){
+              igFinal[m.id]={
+                goldenOnly:0,combo:0,motoyuOnly:0,
+                goldenTotal:0,motoyuTotal:0
+              };
+            });
+            Object.keys(byDay).forEach(function(k){
+              var v=byDay[k];
+              if(v.g&&v.m){
+                igFinal[v.uid].combo++;
+                igFinal[v.uid].goldenTotal++;
+                igFinal[v.uid].motoyuTotal++;
+              }else if(v.g){
+                igFinal[v.uid].goldenOnly++;
+                igFinal[v.uid].goldenTotal++;
+              }else if(v.m){
+                igFinal[v.uid].motoyuOnly++;
+                igFinal[v.uid].motoyuTotal++;
+              }
+            });
+            var hasData=false;
+            MEMBERS.forEach(function(m){
+              var s=igFinal[m.id];
+              if(s.goldenTotal+s.motoyuTotal>0)
+                hasData=true;
+            });
+            if(!hasData)return null;
+            var thisM2=new Date().getMonth()+1;
+            return(<div style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden",marginTop:20}}>
+              <div style={{background:"#E65100",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700}}>{"\u{1F525}"} {thisM2}月の着火回数</div>
+              <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
+                <thead><tr>
+                  <th rowSpan="2" style={{padding:"6px 8px",background:"#FBE9E7",border:"1px solid #eee",textAlign:"center",fontWeight:700,verticalAlign:"middle"}}>名前</th>
+                  <th colSpan="2" style={{padding:"4px 8px",background:"#BBDEFB",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#1565c0",fontSize:11}}>黄金泉</th>
+                  <th colSpan="2" style={{padding:"4px 8px",background:"#FFF3E0",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#E65100",fontSize:11}}>元湯</th>
+                  <th rowSpan="2" style={{padding:"6px 8px",background:"#E8EAF6",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#5C6BC0",fontSize:11,verticalAlign:"middle"}}>□元</th>
+                </tr><tr>
+                  <th style={{padding:"4px 6px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontSize:10,fontWeight:600}}>□のみ</th>
+                  <th style={{padding:"4px 6px",background:"#BBDEFB",border:"1px solid #eee",textAlign:"center",fontSize:10,fontWeight:700,color:"#1565c0"}}>合計</th>
+                  <th style={{padding:"4px 6px",background:"#FFF8E1",border:"1px solid #eee",textAlign:"center",fontSize:10,fontWeight:600}}>元のみ</th>
+                  <th style={{padding:"4px 6px",background:"#FFF3E0",border:"1px solid #eee",textAlign:"center",fontSize:10,fontWeight:700,color:"#E65100"}}>合計</th>
+                </tr></thead>
+                <tbody>{MEMBERS.filter(function(m){
                   var s=igFinal[m.id];
-                  return s.golden+s.combo+s.motoyu>0;
+                  return s.goldenTotal+s.motoyuTotal>0;
                 }).map(function(m){
                   var s=igFinal[m.id];
-                  var total=s.golden+s.combo+s.motoyu;
                   return(<tr key={m.id}>
-                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontWeight:600}}>{m.name}</td>
-                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center"}}>{s.golden}</td>
-                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center"}}>{s.combo}</td>
-                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center"}}>{s.motoyu}</td>
-                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#C62828"}}>{total}</td>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",fontWeight:600}}>{m.name}</td>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",color:"#666"}}>{s.goldenOnly>0?s.goldenOnly:"-"}</td>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#1565c0"}}>{s.goldenTotal}</td>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",color:"#666"}}>{s.motoyuOnly>0?s.motoyuOnly:"-"}</td>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#E65100"}}>{s.motoyuTotal}</td>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",color:"#5C6BC0"}}>{s.combo>0?s.combo:"-"}</td>
                   </tr>);
-                });
-              })()}</tbody>
-            </table>
-            <div style={{padding:"8px 12px",fontSize:10,color:"#888"}}>
-              同日に黄金泉+元湯の両方を着火した場合は「□元」としてカウント
-            </div>
-          </div>
+                })}</tbody>
+              </table>
+              <div style={{padding:"8px 12px",fontSize:10,color:"#888"}}>
+                黄金泉合計 = □のみ + □元 / 元湯合計 = 元のみ + □元 → 手当計算にはそれぞれの合計を使用
+              </div>
+            </div>);
+          })()}
         </div>):null}
 
         {adminTab==="offdays"?(<div><h2 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:12}}>{nxM.year}年{nxM.month}月の休み登録</h2>
