@@ -271,19 +271,20 @@ function generateShift(y,m,offByM,ignOffByM,season){
       return m4.type==="part";
     });
     var injArr=[];
-    if(isTue&&!isSecondTue){
-      // 火曜日(第2火曜以外)→投入なし
+    var note="";
+    var secondTueCrew=[];
+    if(isTue){
+      // 火曜日は全て投入なし
       for(var si=0;si<injSlots.length;si++){
         injArr.push(null);
       }
-    }else if(isSecondTue){
-      // 第2火曜→出勤者から1〜2名、社員優先
-      for(var si2=0;si2<injSlots.length;si2++){
-        if(salary.length>0){
-          injArr.push(salary[si2%salary.length]);
-        }else if(part.length>0){
-          injArr.push(part[si2%part.length]);
-        }else{injArr.push(null);}
+      if(isSecondTue){
+        // 第2火曜→ボイラー掃除、2名選出(社員優先)
+        note="ボイラー掃除";
+        var pool=salary.concat(part);
+        for(var pi=0;pi<Math.min(2,pool.length);pi++){
+          secondTueCrew.push(pool[pi]);
+        }
       }
     }else{
       // 通常日
@@ -327,6 +328,7 @@ function generateShift(y,m,offByM,ignOffByM,season){
     dd3.gi=gi;dd3.mi=mi;dd3.lbl=lbl;
     dd3.nG=nG;dd3.nM=nM;
     dd3.injArr=injArr;dd3.hasOT=hasOT;
+    dd3.note=note;dd3.secondTueCrew=secondTueCrew;
   }
   return days;
 }
@@ -357,6 +359,7 @@ function App(){
   var _shift=useState(null),shiftData=_shift[0],setShiftData=_shift[1];
   var _savedShift=useState(null),savedShift=_savedShift[0],setSavedShift=_savedShift[1];
   var _season=useState("summer"),season=_season[0],setSeason=_season[1];
+  var _monthSt=useState([]),monthSt=_monthSt[0],setMonthSt=_monthSt[1];
 
   useEffect(function(){var t=setInterval(function(){setNow(new Date());},1000);return function(){clearInterval(t);};},[]);
   var nxM=nextMonth();
@@ -434,6 +437,20 @@ function App(){
         snap.forEach(function(doc){a.push(doc.data());});
         setAllDiary(a);
       });
+    // 今月の着火データ(月間集計用)
+    var thisY=new Date().getFullYear();
+    var thisM=new Date().getMonth()+1;
+    var mStart=thisY+"-"+pad(thisM)+"-01";
+    var mEnd=thisY+"-"+pad(thisM)+"-31";
+    db.collection("stamps")
+      .where("dateKey",">=",mStart)
+      .where("dateKey","<=",mEnd)
+      .get()
+      .then(function(snap){
+        var a=[];
+        snap.forEach(function(doc){a.push(doc.data());});
+        setMonthSt(a);
+      });
     loadAllOff();
     db.collection("shifts").doc(mk).get()
       .then(function(doc){
@@ -507,7 +524,7 @@ function App(){
 
   function saveShift(){
     if(!shiftData)return;
-    var ser=shiftData.map(function(d){return{day:d.day,dow:d.dow,att:d.att,gi:d.gi,mi:d.mi,lbl:d.lbl,injArr:d.injArr,injSlots:d.injSlots,hasOT:d.hasOT,forced:d.forced,nG:d.nG,nM:d.nM};});
+    var ser=shiftData.map(function(d){return{day:d.day,dow:d.dow,att:d.att,gi:d.gi,mi:d.mi,lbl:d.lbl,injArr:d.injArr,injSlots:d.injSlots,hasOT:d.hasOT,forced:d.forced,nG:d.nG,nM:d.nM,note:d.note||"",secondTueCrew:d.secondTueCrew||[]};});
     db.collection("shifts").doc(mk).set({monthKey:mk,year:nxM.year,month:nxM.month,days:ser,updated:new Date().getTime()});
     setSavedShift(ser);setMsg("シフトを保存しました");setTimeout(function(){setMsg(null);},3000);
   }
@@ -614,7 +631,68 @@ function App(){
       </div>
       <div style={{padding:16}}>
         {adminTab==="stamps"?(<div><h2 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:12}}>今日の打刻・日誌</h2>
-          {MEMBERS.map(function(m){var ms=byM[m.id]||[];var diary=diaryByM[m.id];return(<div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}><div style={{background:"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}><span>{m.name}</span><span style={{fontSize:12,opacity:0.8}}>{ms.length}件</span></div>{ms.length===0?<div style={{padding:16,color:"#999",fontSize:14,textAlign:"center"}}>打刻なし</div>:<div>{ms.map(function(s,i){return(<div key={i} style={{padding:"10px 16px",borderBottom:i<ms.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{s.icon||""}</span><span style={{fontSize:14,fontWeight:600}}>{s.label}</span></div><div style={{fontSize:16,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div></div>);})}</div>}{diary?<div style={{padding:"10px 16px",background:"#F1F8E9",borderTop:"1px solid #C8E6C9"}}><div style={{fontSize:12,fontWeight:700,color:"#33691E",marginBottom:4}}>{"\u{1F4DD}"} 日誌</div><div style={{display:"flex",gap:16,fontSize:14}}><span><strong>{diary.racks}</strong> ラック</span><span><strong>{diary.bundles}</strong> 束</span><span><strong>{diary.delivers}</strong> 搬入</span></div>{diary.memo?<div style={{fontSize:12,color:"#555",marginTop:4}}>{"\u{1F4AC}"} {diary.memo}</div>:null}</div>:null}</div>);})}</div>):null}
+          {MEMBERS.map(function(m){var ms=byM[m.id]||[];var diary=diaryByM[m.id];
+            // 今日の投入回数
+            var injToday=0;
+            ms.forEach(function(s){if(s.action==="inject")injToday++;});
+            return(<div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}><div style={{background:"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}><span>{m.name}</span><span style={{fontSize:12,opacity:0.8}}>{ms.length}件</span></div>{ms.length===0?<div style={{padding:16,color:"#999",fontSize:14,textAlign:"center"}}>打刻なし</div>:<div>{ms.map(function(s,i){return(<div key={i} style={{padding:"10px 16px",borderBottom:i<ms.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{s.icon||""}</span><span style={{fontSize:14,fontWeight:600}}>{s.label}</span></div><div style={{fontSize:16,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div></div>);})}</div>}
+              {injToday>0?<div style={{padding:"8px 16px",background:"#FFF8E1",borderTop:"1px solid #FFE082",display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:14}}>{"\u{1FAB5}"}</span><span style={{fontSize:13,fontWeight:700,color:"#E65100"}}>本日の投入: {injToday}回</span></div>:null}
+              {diary?<div style={{padding:"10px 16px",background:"#F1F8E9",borderTop:"1px solid #C8E6C9"}}><div style={{fontSize:12,fontWeight:700,color:"#33691E",marginBottom:4}}>{"\u{1F4DD}"} 日誌</div><div style={{display:"flex",gap:16,fontSize:14}}><span><strong>{diary.racks}</strong> ラック</span><span><strong>{diary.bundles}</strong> 束</span><span><strong>{diary.delivers}</strong> 搬入</span></div>{diary.memo?<div style={{fontSize:12,color:"#555",marginTop:4}}>{"\u{1F4AC}"} {diary.memo}</div>:null}</div>:null}</div>);})}
+
+          {/* 月間着火回数サマリー */}
+          <div style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden",marginTop:20}}>
+            <div style={{background:"#E65100",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700}}>{"\u{1F525}"} 今月の着火回数</div>
+            <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
+              <thead><tr>
+                <th style={{padding:"8px 12px",background:"#FBE9E7",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>名前</th>
+                <th style={{padding:"8px 12px",background:"#BBDEFB",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#1565c0"}}>黄金泉(□)</th>
+                <th style={{padding:"8px 12px",background:"#E8EAF6",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#5C6BC0"}}>黄金泉+元湯(□元)</th>
+                <th style={{padding:"8px 12px",background:"#FFF3E0",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#E65100"}}>元湯(元)</th>
+                <th style={{padding:"8px 12px",background:"#FFEBEE",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#C62828"}}>合計</th>
+              </tr></thead>
+              <tbody>{(function(){
+                // monthStから今月の着火データを集計
+                var igStats={};
+                MEMBERS.forEach(function(m){igStats[m.id]={golden:0,combo:0,motoyu:0};});
+                // □元は同日に両方着火した人を検出
+                var byDay={};
+                monthSt.forEach(function(s){
+                  if(s.action!=="ignite_golden"&&s.action!=="ignite_motoyu")return;
+                  var key=s.userId+"_"+s.dateKey;
+                  if(!byDay[key])byDay[key]={g:false,m:false,uid:s.userId};
+                  if(s.action==="ignite_golden")byDay[key].g=true;
+                  if(s.action==="ignite_motoyu")byDay[key].m=true;
+                });
+                // □元の日を集計し直す
+                var igFinal={};
+                MEMBERS.forEach(function(m){igFinal[m.id]={golden:0,combo:0,motoyu:0};});
+                Object.keys(byDay).forEach(function(k){
+                  var v=byDay[k];
+                  if(v.g&&v.m)igFinal[v.uid].combo++;
+                  else if(v.g)igFinal[v.uid].golden++;
+                  else if(v.m)igFinal[v.uid].motoyu++;
+                });
+                return MEMBERS.filter(function(m){
+                  var s=igFinal[m.id];
+                  return s.golden+s.combo+s.motoyu>0;
+                }).map(function(m){
+                  var s=igFinal[m.id];
+                  var total=s.golden+s.combo+s.motoyu;
+                  return(<tr key={m.id}>
+                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontWeight:600}}>{m.name}</td>
+                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center"}}>{s.golden}</td>
+                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center"}}>{s.combo}</td>
+                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center"}}>{s.motoyu}</td>
+                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#C62828"}}>{total}</td>
+                  </tr>);
+                });
+              })()}</tbody>
+            </table>
+            <div style={{padding:"8px 12px",fontSize:10,color:"#888"}}>
+              同日に黄金泉+元湯の両方を着火した場合は「□元」としてカウント
+            </div>
+          </div>
+        </div>):null}
 
         {adminTab==="offdays"?(<div><h2 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:12}}>{nxM.year}年{nxM.month}月の休み登録</h2>
           {MEMBERS.map(function(m){
@@ -649,39 +727,65 @@ function App(){
                 <button onClick={function(){
                   var injS=season==="winter"?["9:00","11:30","14:30","17:00","19:30"]:["9:00","11:30","14:30","17:00"];
                   var wNames=WORKERS.map(function(m){return m.name;});
-                  var colW2=[30,28];for(var wi=0;wi<wNames.length;wi++)colW2.push(28);colW2.push(24);for(var ii2=0;ii2<injS.length;ii2++)colW2.push(36);colW2.push(24);
+                  var colW2=[30,28];for(var wi=0;wi<wNames.length;wi++)colW2.push(28);colW2.push(24);for(var ii2=0;ii2<injS.length;ii2++)colW2.push(36);colW2.push(24);colW2.push(50);
                   var totalW2=0;for(var ci=0;ci<colW2.length;ci++)totalW2+=colW2[ci];
                   var rowH2=22;var headH2=28;var titleH2=30;var rows2=displayShift.length;var canH2=titleH2+headH2+rows2*rowH2+20;
                   var canvas=document.createElement("canvas");canvas.width=totalW2*3;canvas.height=canH2*3;
                   var ctx=canvas.getContext("2d");ctx.scale(3,3);
                   ctx.fillStyle="#fff";ctx.fillRect(0,0,totalW2,canH2);
                   ctx.fillStyle="#1a237e";ctx.font="bold 11px sans-serif";ctx.textAlign="center";
-                  ctx.fillText("工場シフト "+nxM.year+"年"+nxM.month+"月 ("+( season==="winter"?"冬場5回":"夏場4回")+")",totalW2/2,18);
+                  ctx.fillText("工場シフト "+nxM.year+"年"+nxM.month+"月 ("+(season==="winter"?"冬場5回":"夏場4回")+")",totalW2/2,18);
                   var y0=titleH2;var x=0;
-                  var hds=["日","曜"];for(var wi2=0;wi2<wNames.length;wi2++)hds.push(wNames[wi2]);hds.push("人数");for(var ii3=0;ii3<injS.length;ii3++)hds.push(injS[ii3]);hds.push("残業");
-                  var hBgs=["#1a237e","#1a237e","#7B1FA2","#43A047","#FB8C00","#1E88E5","#1a237e"];for(var ii4=0;ii4<injS.length;ii4++)hBgs.push(injS[ii4]==="14:30"?"#C62828":"#FF6F00");hBgs.push("#1a237e");
+                  var hds=["日","曜"];for(var wi2=0;wi2<wNames.length;wi2++)hds.push(wNames[wi2]);hds.push("人数");for(var ii3=0;ii3<injS.length;ii3++)hds.push(injS[ii3]);hds.push("残業");hds.push("備考");
+                  var hBgs=["#1a237e","#1a237e","#7B1FA2","#43A047","#FB8C00","#1E88E5","#1a237e"];for(var ii4=0;ii4<injS.length;ii4++)hBgs.push(injS[ii4]==="14:30"?"#C62828":"#FF6F00");hBgs.push("#1a237e");hBgs.push("#546E7A");
                   ctx.font="bold 8px sans-serif";
                   for(var hi=0;hi<hds.length;hi++){ctx.fillStyle=hBgs[hi]||"#1a237e";ctx.fillRect(x,y0,colW2[hi],headH2);ctx.strokeStyle="#ccc";ctx.strokeRect(x,y0,colW2[hi],headH2);ctx.fillStyle="#fff";ctx.fillText(hds[hi],x+colW2[hi]/2,y0+headH2/2+3);x+=colW2[hi];}
+                  var s2img=getNth(nxM.year,nxM.month,2,2);
                   for(var ri=0;ri<displayShift.length;ri++){
                     var d=displayShift[ri];var ry=y0+headH2+ri*rowH2;var x2=0;
                     ctx.font="bold 8px sans-serif";
-                    var vals=[String(d.day),DJ[d.dow]];for(var wi3=0;wi3<WORKERS.length;wi3++)vals.push(d.att.indexOf(WORKERS[wi3].id)>=0?"○":"×");vals.push(String(d.att.length));
-                    var slots=d.injSlots||injS;var isTueNo=d.dow===2&&d.day!==getNth(nxM.year,nxM.month,2,2);
-                    for(var si=0;si<slots.length;si++){var who=d.injArr?d.injArr[si]:null;vals.push(isTueNo?"休":who?findMember(who).name:"-");}
-                    vals.push(d.hasOT?"20分":"-");
-                    for(var vi=0;vi<vals.length;vi++){
-                      var bg="#fff";
-                      if(vi<2)bg="#f5f5f5";
-                      else if(vi<2+WORKERS.length){bg=d.att.indexOf(WORKERS[vi-2].id)>=0?"#E8F5E9":"#fafafa";}
-                      else if(vi===2+WORKERS.length)bg="#f5f5f5";
-                      else if(vi>2+WORKERS.length&&vi<2+WORKERS.length+1+slots.length){var sIdx=vi-(2+WORKERS.length+1);if(isTueNo)bg="#f0f0f0";else if(slots[sIdx]==="14:30")bg="#FFEBEE";else bg="#FFF8E1";}
-                      ctx.fillStyle=bg;ctx.fillRect(x2,ry,colW2[vi],rowH2);ctx.strokeStyle="#eee";ctx.strokeRect(x2,ry,colW2[vi],rowH2);
-                      ctx.fillStyle=vi===1?(d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"):(vals[vi]==="×"?"#ccc":"#333");
-                      ctx.fillText(vals[vi],x2+colW2[vi]/2,ry+rowH2/2+3);x2+=colW2[vi];
+                    var isTue2=d.dow===2;var isS2=isTue2&&d.day===s2img;
+                    // 日,曜,出勤○×,人数
+                    var baseVals=[String(d.day),DJ[d.dow]];for(var wi3=0;wi3<WORKERS.length;wi3++)baseVals.push(d.att.indexOf(WORKERS[wi3].id)>=0?"○":"×");baseVals.push(String(d.att.length));
+                    for(var bvi=0;bvi<baseVals.length;bvi++){
+                      var bg="#fff";if(bvi<2)bg="#f5f5f5";else if(bvi<2+WORKERS.length){bg=d.att.indexOf(WORKERS[bvi-2].id)>=0?"#E8F5E9":"#fafafa";}else bg="#f5f5f5";
+                      ctx.fillStyle=bg;ctx.fillRect(x2,ry,colW2[bvi],rowH2);ctx.strokeStyle="#eee";ctx.strokeRect(x2,ry,colW2[bvi],rowH2);
+                      ctx.fillStyle=bvi===1?(d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"):(baseVals[bvi]==="×"?"#ccc":"#333");
+                      ctx.fillText(baseVals[bvi],x2+colW2[bvi]/2,ry+rowH2/2+3);x2+=colW2[bvi];
                     }
+                    // 投入スロット
+                    var injStart=x2;
+                    if(isS2){
+                      var injTotalW=0;for(var iw=0;iw<injS.length;iw++)injTotalW+=colW2[baseVals.length+iw];
+                      ctx.fillStyle="#E3F2FD";ctx.fillRect(injStart,ry,injTotalW,rowH2);ctx.strokeStyle="#eee";ctx.strokeRect(injStart,ry,injTotalW,rowH2);
+                      ctx.fillStyle="#1565c0";
+                      var crewNames=(d.secondTueCrew||[]).map(function(id){return findMember(id).name;}).join("・");
+                      ctx.fillText(crewNames||"未定",injStart+injTotalW/2,ry+rowH2/2+3);
+                      x2=injStart+injTotalW;
+                    }else if(isTue2){
+                      var injTotalW2=0;for(var iw2=0;iw2<injS.length;iw2++)injTotalW2+=colW2[baseVals.length+iw2];
+                      ctx.fillStyle="#f0f0f0";ctx.fillRect(injStart,ry,injTotalW2,rowH2);ctx.strokeStyle="#eee";ctx.strokeRect(injStart,ry,injTotalW2,rowH2);
+                      ctx.fillStyle="#999";ctx.fillText("休",injStart+injTotalW2/2,ry+rowH2/2+3);
+                      x2=injStart+injTotalW2;
+                    }else{
+                      for(var si2=0;si2<injS.length;si2++){
+                        var cIdx=baseVals.length+si2;var who2=d.injArr?d.injArr[si2]:null;var wn=who2?findMember(who2).name:"-";
+                        var bg2=injS[si2]==="14:30"?"#FFEBEE":"#FFF8E1";
+                        ctx.fillStyle=bg2;ctx.fillRect(x2,ry,colW2[cIdx],rowH2);ctx.strokeStyle="#eee";ctx.strokeRect(x2,ry,colW2[cIdx],rowH2);
+                        ctx.fillStyle="#333";ctx.fillText(wn,x2+colW2[cIdx]/2,ry+rowH2/2+3);x2+=colW2[cIdx];
+                      }
+                    }
+                    // 残業
+                    var otIdx=baseVals.length+injS.length;
+                    ctx.fillStyle="#fff";ctx.fillRect(x2,ry,colW2[otIdx],rowH2);ctx.strokeStyle="#eee";ctx.strokeRect(x2,ry,colW2[otIdx],rowH2);
+                    ctx.fillStyle=d.hasOT?"#e53935":"#999";ctx.fillText(d.hasOT?"20分":"-",x2+colW2[otIdx]/2,ry+rowH2/2+3);x2+=colW2[otIdx];
+                    // 備考
+                    var noteIdx=otIdx+1;
+                    ctx.fillStyle=isS2?"#E3F2FD":"#fff";ctx.fillRect(x2,ry,colW2[noteIdx],rowH2);ctx.strokeStyle="#eee";ctx.strokeRect(x2,ry,colW2[noteIdx],rowH2);
+                    ctx.fillStyle=isS2?"#1565c0":"#666";ctx.fillText(d.note||"",x2+colW2[noteIdx]/2,ry+rowH2/2+3);
                   }
                   ctx.fillStyle="#888";ctx.font="8px sans-serif";ctx.textAlign="left";
-                  ctx.fillText("★14:30=社員必須(火水除く) / 火曜(第2除く)=投入休 / 17:00バイト=残業20分",4,titleH2+headH2+rows2*rowH2+12);
+                  ctx.fillText("★14:30=社員必須(火水除く) / 火曜=投入休 / 第2火曜=ボイラー掃除",4,titleH2+headH2+rows2*rowH2+12);
                   var link=document.createElement("a");link.download="工場シフト_"+nxM.year+"年"+nxM.month+"月.png";link.href=canvas.toDataURL("image/png");link.click();
                 }} style={{padding:"6px 16px",borderRadius:8,border:"none",background:"#1a237e",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>{"\u{1F4F7}"} 画像保存</button>
               </div>
@@ -695,26 +799,39 @@ function App(){
                     return(<th key={ti} style={{padding:"6px 4px",background:t==="14:30"?"#C62828":"#FF6F00",color:"#fff",fontSize:9,border:"1px solid #ccc"}}>{t}{t==="14:30"?"★":""}</th>);
                   })}
                   <th style={{padding:"6px 4px",background:"#1a237e",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>残業</th>
+                  <th style={{padding:"6px 4px",background:"#546E7A",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>備考</th>
                 </tr></thead>
                 <tbody>{displayShift.map(function(d,di){
                   var slots=d.injSlots||(season==="winter"?["9:00","11:30","14:30","17:00","19:30"]:["9:00","11:30","14:30","17:00"]);
-                  var isTueNoInj=d.dow===2&&d.day!==getNth(nxM.year,nxM.month,2,2);
-                  return(<tr key={d.day} style={{background:isTueNoInj?"#fafafa":""}}>
+                  var isTue=d.dow===2;
+                  var isSecondTue2=isTue&&d.day===getNth(nxM.year,nxM.month,2,2);
+                  var isTueNoInj=isTue&&!isSecondTue2;
+                  var crew=d.secondTueCrew||[];
+                  return(<tr key={d.day} style={{background:isTue?"#fafafa":""}}>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11}}>{d.day}</td>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:600,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>
                     {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;return(<td key={m.id} onClick={function(){if(shiftData)toggleShiftAtt(di,m.id);}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{on?"○":"×"}</td>);})}
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:700,color:d.att.length<=1?"#e53935":"#333"}}>{d.att.length}</td>
-                    {slots.map(function(t,si){
-                      var who=d.injArr?d.injArr[si]:null;
-                      var whoName=who?findMember(who).name:"-";
-                      return(<td key={si} style={{padding:"2px",border:"1px solid #eee",textAlign:"center",fontSize:10,background:isTueNoInj?"#f5f5f5":t==="14:30"?"#FFEBEE":"#FFF8E1"}}>
-                        {shiftData?<select value={who||""} onChange={function(e){chgInj(di,si,e.target.value);}} style={{border:"none",background:"transparent",fontSize:9,fontWeight:600,textAlign:"center",width:"100%",cursor:"pointer"}}>
-                          <option value="">-</option>
-                          {d.att.map(function(id){return(<option key={id} value={id}>{findMember(id).name}</option>);})}
-                        </select>:<span style={{fontWeight:600}}>{isTueNoInj?"休":whoName}</span>}
-                      </td>);
-                    })}
+                    {isSecondTue2?(
+                      <td colSpan={slots.length} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:"#E3F2FD",fontWeight:600}}>
+                        {crew.length>0?crew.map(function(id){return findMember(id).name;}).join("・"):"未定"}
+                      </td>
+                    ):isTueNoInj?(
+                      <td colSpan={slots.length} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:"#f5f5f5",color:"#999"}}>休</td>
+                    ):(
+                      slots.map(function(t,si){
+                        var who=d.injArr?d.injArr[si]:null;
+                        var whoName=who?findMember(who).name:"-";
+                        return(<td key={si} style={{padding:"2px",border:"1px solid #eee",textAlign:"center",fontSize:10,background:t==="14:30"?"#FFEBEE":"#FFF8E1"}}>
+                          {shiftData?<select value={who||""} onChange={function(e){chgInj(di,si,e.target.value);}} style={{border:"none",background:"transparent",fontSize:9,fontWeight:600,textAlign:"center",width:"100%",cursor:"pointer"}}>
+                            <option value="">-</option>
+                            {d.att.map(function(id){return(<option key={id} value={id}>{findMember(id).name}</option>);})}
+                          </select>:<span style={{fontWeight:600}}>{whoName}</span>}
+                        </td>);
+                      })
+                    )}
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:10,color:d.hasOT?"#e53935":"#999"}}>{d.hasOT?"20分":"-"}</td>
+                    <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:10,color:isSecondTue2?"#1565c0":"#666"}}>{d.note||""}</td>
                   </tr>);
                 })}</tbody>
               </table>
