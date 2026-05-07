@@ -635,29 +635,95 @@ function App(){
             return(<div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}><div style={{background:"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}><span>{m.name}</span><span style={{fontSize:12,opacity:0.8}}>{ms.length}件</span></div>{ms.length===0?<div style={{padding:16,color:"#999",fontSize:14,textAlign:"center"}}>打刻なし</div>:<div>{ms.map(function(s,i){return(<div key={i} style={{padding:"10px 16px",borderBottom:i<ms.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{s.icon||""}</span><span style={{fontSize:14,fontWeight:600}}>{s.label}</span></div><div style={{fontSize:16,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div></div>);})}</div>}
               {diary?<div style={{padding:"10px 16px",background:"#F1F8E9",borderTop:"1px solid #C8E6C9"}}><div style={{fontSize:12,fontWeight:700,color:"#33691E",marginBottom:4}}>{"\u{1F4DD}"} 日誌</div><div style={{display:"flex",gap:16,fontSize:14}}><span><strong>{diary.racks}</strong> ラック</span><span><strong>{diary.bundles}</strong> 束</span><span><strong>{diary.delivers}</strong> 搬入</span></div>{diary.memo?<div style={{fontSize:12,color:"#555",marginTop:4}}>{"\u{1F4AC}"} {diary.memo}</div>:null}</div>:null}</div>);})}
 
-          {/* 今日の投入一覧 */}
+          {/* 今月の投入一覧(日別) */}
           {(function(){
-            var injList=allSt.filter(function(s){return s.action==="inject";}).sort(function(a,b){return a.time-b.time;});
-            if(injList.length===0)return null;
+            var injAll=monthSt.filter(function(s){
+              return s.action==="inject";
+            });
+            if(injAll.length===0)return null;
+            // 日付ごとにグループ化
+            var byDate={};
+            injAll.forEach(function(s){
+              if(!byDate[s.dateKey])
+                byDate[s.dateKey]={date:s.dateStr,items:[]};
+              byDate[s.dateKey].items.push(s);
+            });
+            // 日付順にソート
+            var dateKeys=Object.keys(byDate).sort();
+            var thisM3=new Date().getMonth()+1;
             return(<div style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden",marginTop:20}}>
-              <div style={{background:"#1565C0",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}>
-                <span>{"\u{1FAB5}"} 今日の投入一覧</span>
-                <span style={{fontSize:14}}>計{injList.length}回</span>
+              <div style={{background:"#1565C0",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700}}>
+                {"\u{1FAB5}"} {thisM3}月の投入一覧
               </div>
-              <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
+              <table style={{borderCollapse:"collapse",width:"100%",fontSize:12}}>
                 <thead><tr>
-                  <th style={{padding:"8px 12px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>回</th>
-                  <th style={{padding:"8px 12px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>時刻</th>
-                  <th style={{padding:"8px 12px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>担当</th>
+                  <th style={{padding:"6px 8px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>日付</th>
+                  <th style={{padding:"6px 8px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>回数</th>
+                  <th style={{padding:"6px 8px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"left",fontWeight:700}}>担当（時刻順）</th>
                 </tr></thead>
-                <tbody>{injList.map(function(s,i){
-                  return(<tr key={i}>
-                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontWeight:600}}>{i+1}</td>
-                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontFamily:"'Courier New',monospace",fontWeight:700}}>{s.timeStr}</td>
-                    <td style={{padding:"6px 12px",border:"1px solid #eee",textAlign:"center",fontWeight:600}}>{s.userName}</td>
+                <tbody>{dateKeys.map(function(dk){
+                  var g=byDate[dk];
+                  var sorted=g.items.slice().sort(
+                    function(a,b){return a.time-b.time;}
+                  );
+                  var dateD=dk.split("-");
+                  var w=doW(
+                    parseInt(dateD[0]),
+                    parseInt(dateD[1]),
+                    parseInt(dateD[2])
+                  );
+                  var label=parseInt(dateD[1])+"/"
+                    +parseInt(dateD[2])
+                    +"("+DJ[w]+")";
+                  return(<tr key={dk}>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",fontWeight:600,
+                      color:w===0?"#e53935":w===6?"#1565c0":"#333"
+                    }}>{label}</td>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>
+                      {sorted.length}回
+                    </td>
+                    <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"left",fontSize:11}}>
+                      {sorted.map(function(s,i){
+                        return(<span key={i} style={{marginRight:8}}>
+                          <span style={{color:"#888",fontFamily:"'Courier New',monospace",fontSize:10}}>{s.timeStr.slice(0,5)}</span>
+                          <span style={{fontWeight:600,marginLeft:2}}>{s.userName}</span>
+                          {i<sorted.length-1?<span style={{color:"#ccc"}}> | </span>:null}
+                        </span>);
+                      })}
+                    </td>
                   </tr>);
                 })}</tbody>
               </table>
+              <div style={{padding:"6px 12px",fontSize:10,color:"#888",borderTop:"1px solid #eee"}}>
+                月間合計: {injAll.length}回
+              </div>
+              {/* 人別投入回数 */}
+              <div style={{borderTop:"2px solid #1565C0",padding:"12px 16px"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#1565C0",marginBottom:8}}>{"\u{1F4CA}"} 人別投入回数</div>
+                <table style={{borderCollapse:"collapse",width:"100%",fontSize:13}}>
+                  <thead><tr>
+                    <th style={{padding:"6px 8px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>名前</th>
+                    <th style={{padding:"6px 8px",background:"#E3F2FD",border:"1px solid #eee",textAlign:"center",fontWeight:700}}>投入回数</th>
+                  </tr></thead>
+                  <tbody>{(function(){
+                    var byPerson={};
+                    injAll.forEach(function(s){
+                      if(!byPerson[s.userId])
+                        byPerson[s.userId]={name:s.userName,count:0};
+                      byPerson[s.userId].count++;
+                    });
+                    var sorted2=Object.keys(byPerson).map(function(id){
+                      return{id:id,name:byPerson[id].name,count:byPerson[id].count};
+                    }).sort(function(a,b){return b.count-a.count;});
+                    return sorted2.map(function(p){
+                      return(<tr key={p.id}>
+                        <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",fontWeight:600}}>{p.name}</td>
+                        <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"center",fontWeight:700,color:"#1565C0"}}>{p.count}回</td>
+                      </tr>);
+                    });
+                  })()}</tbody>
+                </table>
+              </div>
             </div>);
           })()}
 
