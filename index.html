@@ -63,14 +63,15 @@ function getNth(y,m,wd,n){var c=0;for(var d=1;d<=dim(y,m);d++){if(doW(y,m,d)===w
 function findMember(id){for(var i=0;i<MEMBERS.length;i++){if(MEMBERS[i].id===id)return MEMBERS[i];}return{id:id,name:id,workDays:[],gDays:[],mDays:[]};}
 function getIgniteDays(m){var all=[];(m.gDays||[]).forEach(function(d){if(all.indexOf(d)<0)all.push(d);});(m.mDays||[]).forEach(function(d){if(all.indexOf(d)<0)all.push(d);});return all;}
 
-function generateShift(y,m,offByM,ignOffByM,season){
+function generateShift(y,m,offByM,ignOffByM,season,lateByM){
   var nd=dim(y,m);var days=[];var s2=getNth(y,m,2,2);
   var injSlots=season==="winter"
     ?["9:00","11:30","14:30","17:00","19:30"]
     :["9:00","11:30","14:30","17:00"];
+  var lbm=lateByM||{};
   // 1. 通常メンバーの出勤日を決定
   for(var d=1;d<=nd;d++){
-    var w=doW(y,m,d);var att=[];
+    var w=doW(y,m,d);var att=[];var startTimes={};
     for(var i=0;i<WORKERS.length;i++){
       var mb=WORKERS[i];
       var sched=mb.workDays.indexOf(w)>=0;
@@ -78,7 +79,12 @@ function generateShift(y,m,offByM,ignOffByM,season){
       var off=offByM[mb.id]||[];
       if(sched&&off.indexOf(d)<0) att.push(mb.id);
     }
-    days.push({day:d,dow:w,att:att,forced:[]});
+    // 神原の11時出勤をstartTimesに反映
+    var kamLate=lbm["kambara"]||[];
+    if(kamLate.indexOf(d)>=0&&att.indexOf("kambara")>=0){
+      startTimes["kambara"]="11:00";
+    }
+    days.push({day:d,dow:w,att:att,forced:[],startTimes:startTimes});
   }
   // 2. 出勤者ゼロの日→社員(浜辺)優先、次に具志堅
   for(var d1b=0;d1b<days.length;d1b++){
@@ -527,19 +533,20 @@ function App(){
 
   function doGenerateShift(){
     // 最新データを再取得してからシフト生成
-    var offByM2={};var ignOffByM2={};
-    MEMBERS.forEach(function(m){offByM2[m.id]=[];ignOffByM2[m.id]=[];});
+    var offByM2={};var ignOffByM2={};var lateByM2={};
+    MEMBERS.forEach(function(m){offByM2[m.id]=[];ignOffByM2[m.id]=[];lateByM2[m.id]=[];});
     var done2=0;var total2=MEMBERS.length*2;
     function afterLoad(){
       done2++;
       if(done2>=total2){
-        var days=generateShift(nxM.year,nxM.month,offByM2,ignOffByM2,season);
+        var days=generateShift(nxM.year,nxM.month,offByM2,ignOffByM2,season,lateByM2);
         setShiftData(days);setSavedShift(null);
       }
     }
     MEMBERS.forEach(function(m){
       db.collection("offdays").doc(m.id+"_"+mk).get().then(function(doc){
         if(doc.exists&&doc.data().days)offByM2[m.id]=doc.data().days;
+        if(doc.exists&&doc.data().lateDays)lateByM2[m.id]=doc.data().lateDays;
         afterLoad();
       }).catch(function(){afterLoad();});
       db.collection("igniteoff").doc(m.id+"_"+mk).get().then(function(doc){
@@ -664,6 +671,7 @@ function App(){
     var byM={};MEMBERS.forEach(function(m){byM[m.id]=[];});allSt.forEach(function(s){if(byM[s.userId])byM[s.userId].push(s);});
     var diaryByM={};MEMBERS.forEach(function(m){diaryByM[m.id]=null;});allDiary.forEach(function(d){diaryByM[d.userId]=d;});
     var offByM={};MEMBERS.forEach(function(m){offByM[m.id]=[];});allOff.forEach(function(o){if(o.userId&&offByM[o.userId]!==undefined)offByM[o.userId]=o.days||[];});
+    var lateByM={};MEMBERS.forEach(function(m){lateByM[m.id]=[];});allOff.forEach(function(o){if(o.userId&&lateByM[o.userId]!==undefined&&o.lateDays)lateByM[o.userId]=o.lateDays;});
     var ignOffByM={};MEMBERS.forEach(function(m){ignOffByM[m.id]=[];});allIgnOff.forEach(function(o){if(o.userId&&ignOffByM[o.userId]!==undefined)ignOffByM[o.userId]=o.days||[];});
     var displayShift=shiftData||savedShift||null;
 
@@ -851,7 +859,7 @@ function App(){
 
         {adminTab==="offdays"?(<div><h2 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:12}}>{nxM.year}年{nxM.month}月の休み登録</h2>
           {MEMBERS.map(function(m){
-            var wOff=offByM[m.id]||[];var iOff=ignOffByM[m.id]||[];
+            var wOff=offByM[m.id]||[];var iOff=ignOffByM[m.id]||[];var lDays=lateByM[m.id]||[];
             var hasWork=m.workDays.length>0;var hasIgn=getIgniteDays(m).length>0;
             if(m.id==="gushiken")hasIgn=true;
             if(!hasWork&&!hasIgn)return null;
@@ -859,6 +867,7 @@ function App(){
               <div style={{background:m.type==="ignite"?"#E65100":"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700}}>{m.name}</div>
               <div style={{padding:"8px 12px"}}>
                 {hasWork?<div style={{marginBottom:4}}><span style={{fontSize:12,color:"#2E7D32",fontWeight:600}}>工場休み: </span>{wOff.length===0?<span style={{fontSize:12,color:"#999"}}>なし</span>:<span style={{fontSize:13,fontWeight:600}}>{wOff.slice().sort(function(a,b){return a-b;}).map(function(d){return nxM.month+"/"+d+"("+DJ[doW(nxM.year,nxM.month,d)]+")";}).join("、")}</span>}</div>:null}
+                {m.id==="kambara"&&lDays.length>0?<div style={{marginBottom:4}}><span style={{fontSize:12,color:"#E65100",fontWeight:600}}>11時出勤: </span><span style={{fontSize:13,fontWeight:600,color:"#E65100"}}>{lDays.slice().sort(function(a,b){return a-b;}).map(function(d){return nxM.month+"/"+d+"("+DJ[doW(nxM.year,nxM.month,d)]+")";}).join("、")}</span></div>:null}
                 {hasIgn?<div><span style={{fontSize:12,color:"#E65100",fontWeight:600}}>着火休み: </span>{iOff.length===0?<span style={{fontSize:12,color:"#999"}}>なし</span>:<span style={{fontSize:13,fontWeight:600}}>{iOff.slice().sort(function(a,b){return a-b;}).map(function(d){return nxM.month+"/"+d+"("+DJ[doW(nxM.year,nxM.month,d)]+")";}).join("、")}</span>}</div>:null}
               </div>
             </div>);
@@ -969,7 +978,7 @@ function App(){
                   return(<tr key={d.day} style={{background:isTue?"#fafafa":""}}>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11}}>{d.day}</td>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:600,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>
-                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;return(<td key={m.id} onClick={function(){if(shiftData)toggleShiftAtt(di,m.id);}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{on?"○":"×"}</td>);})}
+                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;var st=(d.startTimes||{})[m.id];var isLate=m.id==="kambara"&&st==="11:00";return(<td key={m.id} onClick={function(){if(shiftData)toggleShiftAtt(di,m.id);}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:isLate?"#FFF3E0":on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:isLate?"#E65100":on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{on?(isLate?"○11時":"○"):"×"}</td>);})}
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:700,color:d.att.length<=1?"#e53935":"#333"}}>{d.att.length}</td>
                     {isSecondTue2?(
                       <td colSpan={slots.length} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:"#E3F2FD",fontWeight:600}}>
