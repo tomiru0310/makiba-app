@@ -526,13 +526,25 @@ function App(){
 
   function saveShift(){
     if(!shiftData)return;
-    var ser=shiftData.map(function(d){return{day:d.day,dow:d.dow,att:d.att,gi:d.gi,mi:d.mi,lbl:d.lbl,injArr:d.injArr,injSlots:d.injSlots,hasOT:d.hasOT,forced:d.forced,nG:d.nG,nM:d.nM,note:d.note||"",secondTueCrew:d.secondTueCrew||[]};});
+    var ser=shiftData.map(function(d){return{day:d.day,dow:d.dow,att:d.att,gi:d.gi,mi:d.mi,lbl:d.lbl,injArr:d.injArr,injSlots:d.injSlots,hasOT:d.hasOT,forced:d.forced,nG:d.nG,nM:d.nM,note:d.note||"",secondTueCrew:d.secondTueCrew||[],startTimes:d.startTimes||{}};});
     db.collection("shifts").doc(mk).set({monthKey:mk,year:nxM.year,month:nxM.month,days:ser,updated:new Date().getTime()});
     setSavedShift(ser);setMsg("シフトを保存しました");setTimeout(function(){setMsg(null);},3000);
   }
   function toggleShiftAtt(di,mid){
     if(!shiftData)return;
     var nd3=shiftData.map(function(d,i){if(i!==di)return d;var na=d.att.slice();var idx=na.indexOf(mid);if(idx>=0)na.splice(idx,1);else na.push(mid);return Object.assign({},d,{att:na});});
+    setShiftData(nd3);setSavedShift(null);
+  }
+  function chgStartTime(di,mid,val){
+    if(!shiftData)return;
+    var nd3=shiftData.map(function(d,i){
+      if(i!==di)return d;
+      var u=Object.assign({},d);
+      var st=Object.assign({},u.startTimes||{});
+      st[mid]=val;
+      u.startTimes=st;
+      return u;
+    });
     setShiftData(nd3);setSavedShift(null);
   }
   function chgIgnite(di,colId,val){
@@ -927,7 +939,7 @@ function App(){
                   return(<tr key={d.day} style={{background:isTue?"#fafafa":""}}>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11}}>{d.day}</td>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:600,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>
-                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;return(<td key={m.id} onClick={function(){if(shiftData)toggleShiftAtt(di,m.id);}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{on?"○":"×"}</td>);})}
+                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;var st=(d.startTimes||{})[m.id];return(<td key={m.id} onClick={function(){if(shiftData&&m.id!=="kambara")toggleShiftAtt(di,m.id);}} style={{padding:"2px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{m.id==="kambara"&&shiftData?<div><select value={on?(st||"9:00"):"off"} onChange={function(e){var v=e.target.value;if(v==="off"){if(on)toggleShiftAtt(di,"kambara");}else{if(!on)toggleShiftAtt(di,"kambara");chgStartTime(di,"kambara",v);}}} style={{border:"none",background:"transparent",fontSize:10,fontWeight:700,cursor:"pointer",color:on?"#43A047":"#ccc",textAlign:"center",width:"100%"}} onClick={function(e){e.stopPropagation();}}><option value="9:00">○9時</option><option value="11:00">○11時</option><option value="off">×</option></select></div>:(on?"○":"×")}</td>);})}
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:700,color:d.att.length<=1?"#e53935":"#333"}}>{d.att.length}</td>
                     {isSecondTue2?(
                       <td colSpan={slots.length} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:"#E3F2FD",fontWeight:600}}>
