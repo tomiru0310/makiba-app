@@ -353,6 +353,7 @@ function App(){
   var _memo=useState(""),memo=_memo[0],setMemo=_memo[1];
   var _showOff=useState(false),showOff=_showOff[0],setShowOff=_showOff[1];
   var _offDays=useState([]),offDays=_offDays[0],setOffDays=_offDays[1];
+  var _lateDays=useState([]),lateDays=_lateDays[0],setLateDays=_lateDays[1];
   var _ignOffDays=useState([]),ignOffDays=_ignOffDays[0],setIgnOffDays=_ignOffDays[1];
   var _allOff=useState([]),allOff=_allOff[0],setAllOff=_allOff[1];
   var _allIgnOff=useState([]),allIgnOff=_allIgnOff[0],setAllIgnOff=_allIgnOff[1];
@@ -376,7 +377,10 @@ function App(){
         if(doc.exists&&doc.data().days){
           setOffDays(doc.data().days);
         }else{setOffDays([]);}
-      }).catch(function(){setOffDays([]);});
+        if(doc.exists&&doc.data().lateDays){
+          setLateDays(doc.data().lateDays);
+        }else{setLateDays([]);}
+      }).catch(function(){setOffDays([]);setLateDays([]);});
     // 着火休み
     db.collection("igniteoff").doc(uid+"_"+mk).get()
       .then(function(doc){
@@ -490,6 +494,27 @@ function App(){
   function doCheckoutSkip(){doStamp({id:"checkout",label:"退 勤",icon:"\u{1F3E0}",color:"#C62828"});setShowDiary(false);}
 
   function toggleOff(day){
+    // 神原の場合: 通常 → 11時出勤 → 休み → 通常
+    if(user&&user.id==="kambara"){
+      var isLate=lateDays.indexOf(day)>=0;
+      var isOff=offDays.indexOf(day)>=0;
+      var newLate=lateDays.slice();
+      var newOff=offDays.slice();
+      if(!isLate&&!isOff){
+        // 通常 → 11時出勤
+        newLate.push(day);
+      }else if(isLate&&!isOff){
+        // 11時出勤 → 休み
+        newLate=newLate.filter(function(d){return d!==day;});
+        newOff.push(day);
+      }else{
+        // 休み → 通常
+        newOff=newOff.filter(function(d){return d!==day;});
+      }
+      setLateDays(newLate);setOffDays(newOff);
+      db.collection("offdays").doc(user.id+"_"+mk).set({userId:user.id,userName:user.name,monthKey:mk,days:newOff,lateDays:newLate,updated:new Date().getTime()});
+      return;
+    }
     var nd2;if(offDays.indexOf(day)>=0)nd2=offDays.filter(function(d){return d!==day;});else nd2=offDays.concat([day]);
     setOffDays(nd2);
     db.collection("offdays").doc(user.id+"_"+mk).set({userId:user.id,userName:user.name,monthKey:mk,days:nd2,updated:new Date().getTime()});
@@ -606,20 +631,25 @@ function App(){
     </div>);
   }
 
-  function renderCalendar(y,m,activeDays,selectedDays,onToggle,label,activeColor,selectedColor){
+  function renderCalendar(y,m,activeDays,selectedDays,onToggle,label,activeColor,selectedColor,lateDaysArr){
     var nd2=dim(y,m);var firstDow=doW(y,m,1);var weeks=[];var week=[];
     for(var i=0;i<firstDow;i++)week.push(null);for(var d=1;d<=nd2;d++){week.push(d);if(week.length===7){weeks.push(week);week=[];}}
     if(week.length>0){while(week.length<7)week.push(null);weeks.push(week);}
+    var ld=lateDaysArr||[];
     return(<div>
       <div style={{fontSize:14,fontWeight:700,color:activeColor,marginBottom:8,padding:"8px 0",borderBottom:"2px solid "+activeColor}}>{label}</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
         {DJ.map(function(dn,i){return(<div key={i} style={{textAlign:"center",fontSize:12,fontWeight:700,padding:"4px 0",color:i===0?"#e53935":i===6?"#1565c0":"#333"}}>{dn}</div>);})}
       </div>
       {weeks.map(function(wk,wi){return(<div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
-        {wk.map(function(d,di){if(d===null)return <div key={di}></div>;var w=doW(y,m,d);var isActive=activeDays.indexOf(w)>=0;var isSel=selectedDays.indexOf(d)>=0;
-          return(<button key={di} disabled={!isActive} onClick={function(){if(isActive)onToggle(d);}} style={{padding:"8px 0",borderRadius:8,border:isSel?"2px solid "+selectedColor:isActive?"2px solid "+activeColor:"1px solid #eee",background:isSel?"#FFCDD2":isActive?"#E8F5E9":"#f5f5f5",fontSize:15,fontWeight:isActive?700:400,color:isSel?"#C62828":isActive?"#333":"#ccc",cursor:isActive?"pointer":"default",textAlign:"center"}}>{d}{isSel?<div style={{fontSize:8,color:"#C62828",fontWeight:800}}>休み</div>:null}</button>);
+        {wk.map(function(d,di){if(d===null)return <div key={di}></div>;var w=doW(y,m,d);var isActive=activeDays.indexOf(w)>=0;var isSel=selectedDays.indexOf(d)>=0;var isLate=ld.indexOf(d)>=0;
+          var bg=isSel?"#FFCDD2":isLate?"#FFF3E0":isActive?"#E8F5E9":"#f5f5f5";
+          var bdr=isSel?"2px solid "+selectedColor:isLate?"2px solid #E65100":isActive?"2px solid "+activeColor:"1px solid #eee";
+          var clr=isSel?"#C62828":isLate?"#E65100":isActive?"#333":"#ccc";
+          return(<button key={di} disabled={!isActive} onClick={function(){if(isActive)onToggle(d);}} style={{padding:"6px 0",borderRadius:8,border:bdr,background:bg,fontSize:15,fontWeight:isActive?700:400,color:clr,cursor:isActive?"pointer":"default",textAlign:"center"}}>{d}{isLate?<div style={{fontSize:8,color:"#E65100",fontWeight:800}}>11時</div>:null}{isSel?<div style={{fontSize:8,color:"#C62828",fontWeight:800}}>休み</div>:null}</button>);
         })}</div>);})}
-      {selectedDays.length>0?<div style={{marginTop:8,background:"#FFF8E1",borderRadius:6,padding:"6px 10px",fontSize:13}}><strong style={{color:"#E65100"}}>休み:</strong> {selectedDays.slice().sort(function(a,b){return a-b;}).map(function(d){return m+"/"+d;}).join("、")}</div>:null}
+      {ld.length>0?<div style={{marginTop:4,background:"#FFF3E0",borderRadius:6,padding:"6px 10px",fontSize:13}}><strong style={{color:"#E65100"}}>11時出勤:</strong> {ld.slice().sort(function(a,b){return a-b;}).map(function(d){return m+"/"+d;}).join("、")}</div>:null}
+      {selectedDays.length>0?<div style={{marginTop:4,background:"#FFF8E1",borderRadius:6,padding:"6px 10px",fontSize:13}}><strong style={{color:"#C62828"}}>休み:</strong> {selectedDays.slice().sort(function(a,b){return a-b;}).map(function(d){return m+"/"+d;}).join("、")}</div>:null}
     </div>);
   }
 
@@ -939,7 +969,7 @@ function App(){
                   return(<tr key={d.day} style={{background:isTue?"#fafafa":""}}>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11}}>{d.day}</td>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:600,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>
-                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;var st=(d.startTimes||{})[m.id];return(<td key={m.id} onClick={function(){if(shiftData&&m.id!=="kambara")toggleShiftAtt(di,m.id);}} style={{padding:"2px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{m.id==="kambara"&&shiftData?<div><select value={on?(st||"9:00"):"off"} onChange={function(e){var v=e.target.value;if(v==="off"){if(on)toggleShiftAtt(di,"kambara");}else{if(!on)toggleShiftAtt(di,"kambara");chgStartTime(di,"kambara",v);}}} style={{border:"none",background:"transparent",fontSize:10,fontWeight:700,cursor:"pointer",color:on?"#43A047":"#ccc",textAlign:"center",width:"100%"}} onClick={function(e){e.stopPropagation();}}><option value="9:00">○9時</option><option value="11:00">○11時</option><option value="off">×</option></select></div>:(on?"○":"×")}</td>);})}
+                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;return(<td key={m.id} onClick={function(){if(shiftData)toggleShiftAtt(di,m.id);}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{on?"○":"×"}</td>);})}
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:700,color:d.att.length<=1?"#e53935":"#333"}}>{d.att.length}</td>
                     {isSecondTue2?(
                       <td colSpan={slots.length} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:"#E3F2FD",fontWeight:600}}>
@@ -1015,11 +1045,11 @@ function App(){
       <h2 style={{fontSize:20,fontWeight:800,color:"#333",textAlign:"center",marginBottom:4}}>{"\u{1F4C5}"} 休み登録</h2>
       <p style={{fontSize:14,color:"#888",textAlign:"center",marginBottom:4}}>{user?user.name:""}さん</p>
       <p style={{fontSize:18,fontWeight:700,color:"#1B5E20",textAlign:"center",marginBottom:16}}>{nxM.year}年{nxM.month}月</p>
-      <div style={{background:"#FFF3E0",borderRadius:8,padding:"8px 12px",marginBottom:16,fontSize:13,color:"#E65100",textAlign:"center"}}>休みたい日をタッチ（もう一度で解除）</div>
-      {hasWork?renderCalendar(nxM.year,nxM.month,user.workDays,offDays,toggleOff,"\u{1F3ED} 工場勤務の休み（"+user.workDays.map(function(d){return DJ[d];}).join("")+"）","#2E7D32","#C62828"):null}
+      <div style={{background:"#FFF3E0",borderRadius:8,padding:"8px 12px",marginBottom:16,fontSize:13,color:"#E65100",textAlign:"center"}}>{user&&user.id==="kambara"?"1回タッチ→11時出勤 / もう1回→休み / もう1回→通常":"休みたい日をタッチ（もう一度で解除）"}</div>
+      {hasWork?renderCalendar(nxM.year,nxM.month,user.workDays,offDays,toggleOff,"\u{1F3ED} 工場勤務の休み（"+user.workDays.map(function(d){return DJ[d];}).join("")+"）","#2E7D32","#C62828",user&&user.id==="kambara"?lateDays:null):null}
       {hasWork&&hasIgn?<div style={{height:16}}></div>:null}
       {hasIgn?renderCalendar(nxM.year,nxM.month,igDays,ignOffDays,toggleIgnOff,"\u{1F525} 着火の休み（"+igLabel+"）","#E65100","#C62828"):null}
-      <div style={{display:"flex",gap:12,justifyContent:"center",marginTop:16,fontSize:11,color:"#666",flexWrap:"wrap"}}><span><span style={{display:"inline-block",width:12,height:12,background:"#E8F5E9",border:"2px solid #2E7D32",borderRadius:3,marginRight:3,verticalAlign:"middle"}}></span>担当日</span><span><span style={{display:"inline-block",width:12,height:12,background:"#FFCDD2",border:"2px solid #C62828",borderRadius:3,marginRight:3,verticalAlign:"middle"}}></span>休み</span><span><span style={{display:"inline-block",width:12,height:12,background:"#f5f5f5",border:"1px solid #eee",borderRadius:3,marginRight:3,verticalAlign:"middle"}}></span>元々休み</span></div>
+      <div style={{display:"flex",gap:12,justifyContent:"center",marginTop:16,fontSize:11,color:"#666",flexWrap:"wrap"}}><span><span style={{display:"inline-block",width:12,height:12,background:"#E8F5E9",border:"2px solid #2E7D32",borderRadius:3,marginRight:3,verticalAlign:"middle"}}></span>担当日</span>{user&&user.id==="kambara"?<span><span style={{display:"inline-block",width:12,height:12,background:"#FFF3E0",border:"2px solid #E65100",borderRadius:3,marginRight:3,verticalAlign:"middle"}}></span>11時出勤</span>:null}<span><span style={{display:"inline-block",width:12,height:12,background:"#FFCDD2",border:"2px solid #C62828",borderRadius:3,marginRight:3,verticalAlign:"middle"}}></span>休み</span><span><span style={{display:"inline-block",width:12,height:12,background:"#f5f5f5",border:"1px solid #eee",borderRadius:3,marginRight:3,verticalAlign:"middle"}}></span>元々休み</span></div>
       <button onClick={function(){setShowOff(false);}} style={{width:"100%",padding:"14px",marginTop:16,borderRadius:12,border:"none",background:"#1B5E20",color:"#fff",fontSize:16,fontWeight:700,cursor:"pointer"}}>{"\u2190"} 戻る（自動保存済み）</button>
     </div></div>);
   }
