@@ -369,6 +369,8 @@ function App(){
   var _season=useState("summer"),season=_season[0],setSeason=_season[1];
   var _monthSt=useState([]),monthSt=_monthSt[0],setMonthSt=_monthSt[1];
   var _shiftTarget=useState("next"),shiftTarget=_shiftTarget[0],setShiftTarget=_shiftTarget[1];
+  var _editDate=useState(todayKey()),editDate=_editDate[0],setEditDate=_editDate[1];
+  var _editStamps=useState([]),editStamps=_editStamps[0],setEditStamps=_editStamps[1];
 
   useEffect(function(){var t=setInterval(function(){setNow(new Date());},1000);return function(){clearInterval(t);};},[]);
   var nxM=shiftTarget==="cur"?curMonth():nextMonth();
@@ -430,6 +432,59 @@ function App(){
           if(doc.exists){ignResults.push(doc.data());}
           check();
         }).catch(function(){check();});
+    });
+  }
+
+  function loadDateStamps(dk){
+    db.collection("stamps")
+      .where("dateKey","==",dk)
+      .orderBy("time","desc")
+      .get()
+      .then(function(snap){
+        var a=[];
+        snap.forEach(function(doc){a.push({docId:doc.id,data:doc.data()});});
+        setEditStamps(a);
+      });
+  }
+
+  function adminAddStamp(action,userId){
+    var m=findMember(userId);
+    var labels={"ignite_golden":"着火（黄金泉）","ignite_motoyu":"着火（元 湯）","inject":"投入"};
+    var icons={"ignite_golden":"\u{1F525}","ignite_motoyu":"\u{1F525}","inject":"\u{1FAB5}"};
+    var dk=editDate;
+    var parts=dk.split("-");
+    var dateStr=parseInt(parts[0])+"/"+parseInt(parts[1])+"/"+parseInt(parts[2]);
+    var nowT=new Date();
+    db.collection("stamps").add({
+      userId:userId,userName:m.name,
+      action:action,label:labels[action]||action,icon:icons[action]||"",
+      time:nowT.getTime(),timeStr:"管理者追加",
+      dateStr:dateStr,dateKey:dk,
+      gpsLat:null,gpsLng:null,
+      adminEdit:true
+    }).then(function(){
+      setMsg(m.name+"の"+labels[action]+"を追加しました");
+      setTimeout(function(){setMsg(null);},3000);
+      loadDateStamps(dk);
+      // 月間データも再ロード
+      var thisY=new Date().getFullYear();var thisM=new Date().getMonth()+1;
+      var mStart=thisY+"-"+pad(thisM)+"-01";var mEnd=thisY+"-"+pad(thisM)+"-31";
+      db.collection("stamps").where("dateKey",">=",mStart).where("dateKey","<=",mEnd).get().then(function(snap){
+        var a2=[];snap.forEach(function(doc){a2.push(doc.data());});setMonthSt(a2);
+      });
+    });
+  }
+
+  function adminDeleteStamp(docId){
+    db.collection("stamps").doc(docId).delete().then(function(){
+      setMsg("打刻を削除しました");
+      setTimeout(function(){setMsg(null);},3000);
+      loadDateStamps(editDate);
+      var thisY=new Date().getFullYear();var thisM=new Date().getMonth()+1;
+      var mStart=thisY+"-"+pad(thisM)+"-01";var mEnd=thisY+"-"+pad(thisM)+"-31";
+      db.collection("stamps").where("dateKey",">=",mStart).where("dateKey","<=",mEnd).get().then(function(snap){
+        var a2=[];snap.forEach(function(doc){a2.push(doc.data());});setMonthSt(a2);
+      });
     });
   }
 
@@ -692,6 +747,57 @@ function App(){
             return(<div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}><div style={{background:"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}><span>{m.name}</span><span style={{fontSize:12,opacity:0.8}}>{ms.length}件</span></div>{ms.length===0?<div style={{padding:16,color:"#999",fontSize:14,textAlign:"center"}}>打刻なし</div>:<div>{ms.map(function(s,i){return(<div key={i} style={{padding:"10px 16px",borderBottom:i<ms.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{s.icon||""}</span><span style={{fontSize:14,fontWeight:600}}>{s.label}</span></div><div style={{fontSize:16,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div></div>);})}</div>}
               {diary?<div style={{padding:"10px 16px",background:"#F1F8E9",borderTop:"1px solid #C8E6C9"}}><div style={{fontSize:12,fontWeight:700,color:"#33691E",marginBottom:4}}>{"\u{1F4DD}"} 日誌</div><div style={{display:"flex",gap:16,fontSize:14}}><span><strong>{diary.racks}</strong> ラック</span><span><strong>{diary.bundles}</strong> 束</span><span><strong>{diary.delivers}</strong> 搬入</span></div>{diary.memo?<div style={{fontSize:12,color:"#555",marginTop:4}}>{"\u{1F4AC}"} {diary.memo}</div>:null}</div>:null}</div>);})}
 
+          {/* 着火・投入の管理者編集 */}
+          <div style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden",marginTop:20}}>
+            <div style={{background:"#E65100",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700}}>{"\u{270F}\u{FE0F}"} 着火・投入の編集</div>
+            <div style={{padding:12}}>
+              <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
+                <label style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap"}}>日付:</label>
+                <input type="date" value={editDate} onChange={function(e){setEditDate(e.target.value);loadDateStamps(e.target.value);}} style={{flex:1,padding:"8px",borderRadius:8,border:"2px solid #E65100",fontSize:14,fontWeight:600}} />
+                <button onClick={function(){loadDateStamps(editDate);}} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#E65100",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>表示</button>
+              </div>
+
+              {/* 追加ボタン */}
+              <div style={{background:"#FFF3E0",borderRadius:8,padding:12,marginBottom:12}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#E65100",marginBottom:8}}>追加する</div>
+                <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+                  {[["ignite_golden","\u{1F525} 着火(黄金泉)","#E65100"],["ignite_motoyu","\u{1F525} 着火(元湯)","#4E342E"],["inject","\u{1FAB5} 投入","#1565C0"]].map(function(act){
+                    return(<button key={act[0]} onClick={function(){
+                      var sel=document.getElementById("admin-stamp-user");
+                      if(sel&&sel.value){adminAddStamp(act[0],sel.value);}
+                      else{setMsg("担当者を選んでください");setTimeout(function(){setMsg(null);},2000);}
+                    }} style={{padding:"8px 12px",borderRadius:8,border:"none",background:act[2],color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>{act[1]}</button>);
+                  })}
+                </div>
+                <select id="admin-stamp-user" style={{width:"100%",padding:"8px",borderRadius:8,border:"2px solid #ddd",fontSize:14,fontWeight:600}}>
+                  <option value="">担当者を選択</option>
+                  {MEMBERS.map(function(m){return(<option key={m.id} value={m.id}>{m.name}</option>);})}
+                </select>
+              </div>
+
+              {/* 選択日の着火・投入一覧 */}
+              {editStamps.length>0?<div>
+                <div style={{fontSize:13,fontWeight:700,color:"#333",marginBottom:8}}>
+                  {(function(){var p=editDate.split("-");return parseInt(p[1])+"/"+parseInt(p[2]);})()}の打刻一覧
+                </div>
+                {editStamps.filter(function(s){return s.data.action==="ignite_golden"||s.data.action==="ignite_motoyu"||s.data.action==="inject";}).map(function(s,i){
+                  var d=s.data;
+                  var bgColor=d.action==="ignite_golden"?"#FBE9E7":d.action==="ignite_motoyu"?"#EFEBE9":"#E3F2FD";
+                  return(<div key={s.docId} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:bgColor,borderRadius:8,marginBottom:6}}>
+                    <div>
+                      <span style={{fontSize:16,marginRight:6}}>{d.icon}</span>
+                      <span style={{fontSize:13,fontWeight:700}}>{d.label}</span>
+                      <span style={{fontSize:12,color:"#666",marginLeft:8}}>{d.userName}</span>
+                      <span style={{fontSize:11,color:"#999",marginLeft:8}}>{d.timeStr}</span>
+                      {d.adminEdit?<span style={{fontSize:10,color:"#E65100",marginLeft:6}}>（管理者）</span>:null}
+                    </div>
+                    <button onClick={function(){if(confirm(d.userName+"の「"+d.label+"」を削除しますか？"))adminDeleteStamp(s.docId);}} style={{padding:"4px 10px",borderRadius:6,border:"none",background:"#C62828",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>削除</button>
+                  </div>);
+                })}
+                {editStamps.filter(function(s){return s.data.action==="ignite_golden"||s.data.action==="ignite_motoyu"||s.data.action==="inject";}).length===0?<div style={{padding:12,color:"#999",fontSize:13,textAlign:"center"}}>着火・投入の記録なし</div>:null}
+              </div>:<div style={{padding:12,color:"#999",fontSize:13,textAlign:"center"}}>「表示」ボタンを押すと打刻が表示されます</div>}
+            </div>
+          </div>
           {/* 今月の投入一覧(日別) */}
           {(function(){
             var injAll=monthSt.filter(function(s){
