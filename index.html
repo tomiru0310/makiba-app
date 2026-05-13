@@ -674,6 +674,11 @@ function App(){
     var lateByM={};MEMBERS.forEach(function(m){lateByM[m.id]=[];});allOff.forEach(function(o){if(o.userId&&lateByM[o.userId]!==undefined&&o.lateDays)lateByM[o.userId]=o.lateDays;});
     var ignOffByM={};MEMBERS.forEach(function(m){ignOffByM[m.id]=[];});allIgnOff.forEach(function(o){if(o.userId&&ignOffByM[o.userId]!==undefined)ignOffByM[o.userId]=o.days||[];});
     var displayShift=shiftData||savedShift||null;
+    // 保存済みシフトがあってshiftDataがない場合、shiftDataにコピーして編集可能にする
+    if(!shiftData&&savedShift){
+      // 次のレンダリングでshiftDataにセット（直接呼ぶとループするのでuseEffectの代わりにsetTimeout）
+      setTimeout(function(){setShiftData(savedShift);},0);
+    }
 
     return(<div style={{minHeight:"100vh",background:"#ECEFF1"}}>
       <div style={{background:"linear-gradient(135deg,#1B5E20,#2E7D32)",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#A5D6A7",letterSpacing:2}}>MAKIBA FACTORY</div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{"\u{1F512}"} 管理者画面</div></div><div style={{textAlign:"right"}}><div style={{fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'Courier New',monospace"}}>{fmtTime(now)}</div><div style={{fontSize:12,color:"#C8E6C9"}}>{fmtDate(now)}</div></div></div>
