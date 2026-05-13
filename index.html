@@ -371,6 +371,7 @@ function App(){
   var _shiftTarget=useState("next"),shiftTarget=_shiftTarget[0],setShiftTarget=_shiftTarget[1];
   var _editDate=useState(todayKey()),editDate=_editDate[0],setEditDate=_editDate[1];
   var _editStamps=useState([]),editStamps=_editStamps[0],setEditStamps=_editStamps[1];
+  var _endTime=useState("16:00"),endTime=_endTime[0],setEndTime=_endTime[1];
 
   useEffect(function(){var t=setInterval(function(){setNow(new Date());},1000);return function(){clearInterval(t);};},[]);
   var nxM=shiftTarget==="cur"?curMonth():nextMonth();
@@ -447,6 +448,14 @@ function App(){
       });
   }
 
+  function reloadMonthSt(){
+    var thisY=new Date().getFullYear();var thisM=new Date().getMonth()+1;
+    var mStart=thisY+"-"+pad(thisM)+"-01";var mEnd=thisY+"-"+pad(thisM)+"-31";
+    db.collection("stamps").where("dateKey",">=",mStart).where("dateKey","<=",mEnd).get().then(function(snap){
+      var a2=[];snap.forEach(function(doc){a2.push(Object.assign({_docId:doc.id},doc.data()));});setMonthSt(a2);
+    });
+  }
+
   function adminAddStamp(action,userId){
     var m=findMember(userId);
     var labels={"ignite_golden":"着火（黄金泉）","ignite_motoyu":"着火（元 湯）","inject":"投入"};
@@ -466,12 +475,7 @@ function App(){
       setMsg(m.name+"の"+labels[action]+"を追加しました");
       setTimeout(function(){setMsg(null);},3000);
       loadDateStamps(dk);
-      // 月間データも再ロード
-      var thisY=new Date().getFullYear();var thisM=new Date().getMonth()+1;
-      var mStart=thisY+"-"+pad(thisM)+"-01";var mEnd=thisY+"-"+pad(thisM)+"-31";
-      db.collection("stamps").where("dateKey",">=",mStart).where("dateKey","<=",mEnd).get().then(function(snap){
-        var a2=[];snap.forEach(function(doc){a2.push(doc.data());});setMonthSt(a2);
-      });
+      reloadMonthSt();
     });
   }
 
@@ -480,11 +484,15 @@ function App(){
       setMsg("打刻を削除しました");
       setTimeout(function(){setMsg(null);},3000);
       loadDateStamps(editDate);
-      var thisY=new Date().getFullYear();var thisM=new Date().getMonth()+1;
-      var mStart=thisY+"-"+pad(thisM)+"-01";var mEnd=thisY+"-"+pad(thisM)+"-31";
-      db.collection("stamps").where("dateKey",">=",mStart).where("dateKey","<=",mEnd).get().then(function(snap){
-        var a2=[];snap.forEach(function(doc){a2.push(doc.data());});setMonthSt(a2);
-      });
+      reloadMonthSt();
+    });
+  }
+
+  function adminDeleteById(docId){
+    db.collection("stamps").doc(docId).delete().then(function(){
+      setMsg("削除しました");
+      setTimeout(function(){setMsg(null);},3000);
+      reloadMonthSt();
     });
   }
 
@@ -515,7 +523,7 @@ function App(){
       .get()
       .then(function(snap){
         var a=[];
-        snap.forEach(function(doc){a.push(doc.data());});
+        snap.forEach(function(doc){a.push(Object.assign({_docId:doc.id},doc.data()));});
         setMonthSt(a);
       });
     loadAllOff();
@@ -548,11 +556,15 @@ function App(){
   }
   function doCheckoutWithDiary(){
     var t=new Date();
-    db.collection("stamps").add({userId:user.id,userName:user.name,action:"checkout",label:"退 勤",icon:"\u{1F3E0}",time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null});
+    db.collection("stamps").add({userId:user.id,userName:user.name,action:"checkout",label:"退 勤",icon:"\u{1F3E0}",time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null,endTime:endTime});
     db.collection("diary").add({userId:user.id,userName:user.name,dateKey:todayKey(),dateStr:fmtDate(t),racks:parseInt(racks)||0,bundles:parseInt(bundles)||0,delivers:parseInt(delivers)||0,memo:memo,time:t.getTime()});
-    setMsg("退勤 + 日誌を記録しました");setShowDiary(false);setRacks("0");setBundles("0");setDelivers("0");setMemo("");setTimeout(function(){setMsg(null);},3000);getGps();
+    setMsg("退勤("+endTime+"まで) + 日誌を記録しました");setShowDiary(false);setRacks("0");setBundles("0");setDelivers("0");setMemo("");setEndTime("16:00");setTimeout(function(){setMsg(null);},3000);getGps();
   }
-  function doCheckoutSkip(){doStamp({id:"checkout",label:"退 勤",icon:"\u{1F3E0}",color:"#C62828"});setShowDiary(false);}
+  function doCheckoutSkip(){
+    var t=new Date();
+    db.collection("stamps").add({userId:user.id,userName:user.name,action:"checkout",label:"退 勤",icon:"\u{1F3E0}",time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null,endTime:endTime});
+    setMsg("退勤("+endTime+"まで)を記録しました");setShowDiary(false);setEndTime("16:00");setTimeout(function(){setMsg(null);},3000);getGps();
+  }
 
   function toggleOff(day){
     // 神原の場合: 通常 → 11時出勤 → 休み → 通常
@@ -744,7 +756,7 @@ function App(){
       <div style={{padding:16}}>
         {adminTab==="stamps"?(<div><h2 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:12}}>今日の打刻・日誌</h2>
           {MEMBERS.map(function(m){var ms=byM[m.id]||[];var diary=diaryByM[m.id];
-            return(<div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}><div style={{background:"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}><span>{m.name}</span><span style={{fontSize:12,opacity:0.8}}>{ms.length}件</span></div>{ms.length===0?<div style={{padding:16,color:"#999",fontSize:14,textAlign:"center"}}>打刻なし</div>:<div>{ms.map(function(s,i){return(<div key={i} style={{padding:"10px 16px",borderBottom:i<ms.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{s.icon||""}</span><span style={{fontSize:14,fontWeight:600}}>{s.label}</span></div><div style={{fontSize:16,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div></div>);})}</div>}
+            return(<div key={m.id} style={{background:"#fff",borderRadius:12,marginBottom:12,overflow:"hidden"}}><div style={{background:"#2E7D32",padding:"10px 16px",color:"#fff",fontSize:16,fontWeight:700,display:"flex",justifyContent:"space-between"}}><span>{m.name}</span><span style={{fontSize:12,opacity:0.8}}>{ms.length}件</span></div>{ms.length===0?<div style={{padding:16,color:"#999",fontSize:14,textAlign:"center"}}>打刻なし</div>:<div>{ms.map(function(s,i){return(<div key={i} style={{padding:"10px 16px",borderBottom:i<ms.length-1?"1px solid #eee":"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{s.icon||""}</span><span style={{fontSize:14,fontWeight:600}}>{s.label}{s.endTime?" 〜"+s.endTime:""}</span></div><div style={{fontSize:16,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{s.timeStr}</div></div>);})}</div>}
               {diary?<div style={{padding:"10px 16px",background:"#F1F8E9",borderTop:"1px solid #C8E6C9"}}><div style={{fontSize:12,fontWeight:700,color:"#33691E",marginBottom:4}}>{"\u{1F4DD}"} 日誌</div><div style={{display:"flex",gap:16,fontSize:14}}><span><strong>{diary.racks}</strong> ラック</span><span><strong>{diary.bundles}</strong> 束</span><span><strong>{diary.delivers}</strong> 搬入</span></div>{diary.memo?<div style={{fontSize:12,color:"#555",marginTop:4}}>{"\u{1F4AC}"} {diary.memo}</div>:null}</div>:null}</div>);})}
 
           {/* 着火・投入の管理者編集 */}
@@ -775,26 +787,31 @@ function App(){
                 </select>
               </div>
 
-              {/* 選択日の着火・投入一覧 */}
+              {/* 選択日の打刻一覧 */}
               {editStamps.length>0?<div>
                 <div style={{fontSize:13,fontWeight:700,color:"#333",marginBottom:8}}>
                   {(function(){var p=editDate.split("-");return parseInt(p[1])+"/"+parseInt(p[2]);})()}の打刻一覧
                 </div>
-                {editStamps.filter(function(s){return s.data.action==="ignite_golden"||s.data.action==="ignite_motoyu"||s.data.action==="inject";}).map(function(s,i){
+                {editStamps.map(function(s,i){
                   var d=s.data;
-                  var bgColor=d.action==="ignite_golden"?"#FBE9E7":d.action==="ignite_motoyu"?"#EFEBE9":"#E3F2FD";
+                  var isIG=d.action==="ignite_golden"||d.action==="ignite_motoyu";
+                  var isInj=d.action==="inject";
+                  var isOut=d.action==="checkout";
+                  if(!isIG&&!isInj&&!isOut) return null;
+                  var bgColor=isIG?(d.action==="ignite_golden"?"#FBE9E7":"#EFEBE9"):isInj?"#E3F2FD":"#FFEBEE";
                   return(<div key={s.docId} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:bgColor,borderRadius:8,marginBottom:6}}>
-                    <div>
+                    <div style={{flex:1}}>
                       <span style={{fontSize:16,marginRight:6}}>{d.icon}</span>
                       <span style={{fontSize:13,fontWeight:700}}>{d.label}</span>
                       <span style={{fontSize:12,color:"#666",marginLeft:8}}>{d.userName}</span>
-                      <span style={{fontSize:11,color:"#999",marginLeft:8}}>{d.timeStr}</span>
-                      {d.adminEdit?<span style={{fontSize:10,color:"#E65100",marginLeft:6}}>（管理者）</span>:null}
+                      <span style={{fontSize:11,color:"#999",marginLeft:6}}>{d.timeStr}</span>
+                      {isOut&&d.endTime?<span style={{fontSize:11,color:"#C62828",fontWeight:700,marginLeft:6}}>〜{d.endTime}</span>:null}
+                      {d.adminEdit?<span style={{fontSize:9,color:"#E65100",marginLeft:4}}>（管理者）</span>:null}
+                      {isOut?<select defaultValue={d.endTime||"16:00"} onChange={function(e){db.collection("stamps").doc(s.docId).update({endTime:e.target.value}).then(function(){setMsg("退勤時間を変更しました");setTimeout(function(){setMsg(null);},2000);loadDateStamps(editDate);});}} style={{marginLeft:8,padding:"2px 6px",borderRadius:4,border:"1px solid #C62828",fontSize:11,fontWeight:700,cursor:"pointer"}}><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option></select>:null}
                     </div>
                     <button onClick={function(){if(confirm(d.userName+"の「"+d.label+"」を削除しますか？"))adminDeleteStamp(s.docId);}} style={{padding:"4px 10px",borderRadius:6,border:"none",background:"#C62828",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>削除</button>
                   </div>);
                 })}
-                {editStamps.filter(function(s){return s.data.action==="ignite_golden"||s.data.action==="ignite_motoyu"||s.data.action==="inject";}).length===0?<div style={{padding:12,color:"#999",fontSize:13,textAlign:"center"}}>着火・投入の記録なし</div>:null}
               </div>:<div style={{padding:12,color:"#999",fontSize:13,textAlign:"center"}}>「表示」ボタンを押すと打刻が表示されます</div>}
             </div>
           </div>
@@ -847,10 +864,11 @@ function App(){
                     </td>
                     <td style={{padding:"6px 8px",border:"1px solid #eee",textAlign:"left",fontSize:11}}>
                       {sorted.map(function(s,i){
-                        return(<span key={i} style={{marginRight:8}}>
-                          <span style={{color:"#888",fontFamily:"'Courier New',monospace",fontSize:10}}>{s.timeStr.slice(0,5)}</span>
+                        return(<span key={i} style={{display:"inline-flex",alignItems:"center",marginRight:6,marginBottom:2}}>
+                          <span style={{color:"#888",fontFamily:"'Courier New',monospace",fontSize:10}}>{s.timeStr?s.timeStr.slice(0,5):""}</span>
                           <span style={{fontWeight:600,marginLeft:2}}>{s.userName}</span>
-                          {i<sorted.length-1?<span style={{color:"#ccc"}}> | </span>:null}
+                          {s._docId?<button onClick={function(){if(confirm(s.userName+"の投入を削除しますか？"))adminDeleteById(s._docId);}} style={{marginLeft:3,padding:"1px 5px",borderRadius:4,border:"none",background:"#EF5350",color:"#fff",fontSize:9,fontWeight:700,cursor:"pointer",lineHeight:"14px"}}>×</button>:null}
+                          {i<sorted.length-1?<span style={{color:"#ccc",marginLeft:4}}> | </span>:null}
                         </span>);
                       })}
                     </td>
@@ -963,6 +981,42 @@ function App(){
               </table>
               <div style={{padding:"8px 12px",fontSize:10,color:"#888"}}>
                 黄金泉合計 = □のみ + □元 / 元湯合計 = 元のみ + □元 → 手当計算にはそれぞれの合計を使用
+              </div>
+              {/* 日別着火一覧（削除可能） */}
+              <div style={{borderTop:"2px solid #E65100",padding:"12px 16px"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#E65100",marginBottom:8}}>{"\u{1F4CB}"} 日別着火一覧（編集）</div>
+                {(function(){
+                  var igStamps=monthSt.filter(function(s){return s.action==="ignite_golden"||s.action==="ignite_motoyu";});
+                  var byDateIg={};
+                  igStamps.forEach(function(s){
+                    if(!byDateIg[s.dateKey])byDateIg[s.dateKey]=[];
+                    byDateIg[s.dateKey].push(s);
+                  });
+                  var igDateKeys=Object.keys(byDateIg).sort();
+                  if(igDateKeys.length===0) return <div style={{fontSize:12,color:"#999",textAlign:"center"}}>データなし</div>;
+                  return igDateKeys.map(function(dk){
+                    var items=byDateIg[dk];
+                    var dateD2=dk.split("-");
+                    var w2=doW(parseInt(dateD2[0]),parseInt(dateD2[1]),parseInt(dateD2[2]));
+                    var lbl2=parseInt(dateD2[1])+"/"+parseInt(dateD2[2])+"("+DJ[w2]+")";
+                    return(<div key={dk} style={{marginBottom:6}}>
+                      <div style={{fontSize:12,fontWeight:700,color:"#555",marginBottom:2}}>{lbl2}</div>
+                      {items.map(function(s,i){
+                        var actLabel=s.action==="ignite_golden"?"□黄金泉":"元湯";
+                        var actColor=s.action==="ignite_golden"?"#1565c0":"#E65100";
+                        return(<div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",background:s.action==="ignite_golden"?"#E3F2FD":"#FFF3E0",borderRadius:6,marginBottom:3}}>
+                          <div>
+                            <span style={{fontSize:12,fontWeight:700,color:actColor}}>{actLabel}</span>
+                            <span style={{fontSize:12,marginLeft:8,fontWeight:600}}>{s.userName}</span>
+                            <span style={{fontSize:10,color:"#999",marginLeft:6}}>{s.timeStr}</span>
+                            {s.adminEdit?<span style={{fontSize:9,color:"#E65100",marginLeft:4}}>（管理者）</span>:null}
+                          </div>
+                          {s._docId?<button onClick={function(){if(confirm(s.userName+"の「"+actLabel+"」を削除しますか？"))adminDeleteById(s._docId);}} style={{padding:"2px 8px",borderRadius:4,border:"none",background:"#C62828",color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer"}}>削除</button>:null}
+                        </div>);
+                      })}
+                    </div>);
+                  });
+                })()}
               </div>
             </div>);
           })()}
@@ -1089,11 +1143,11 @@ function App(){
                   return(<tr key={d.day} style={{background:isTue?"#fafafa":""}}>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11}}>{d.day}</td>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:600,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>
-                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;var st=(d.startTimes||{})[m.id];var isLate=m.id==="kambara"&&st==="11:00";return(<td key={m.id} onClick={function(){if(shiftData)toggleShiftAtt(di,m.id);}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:isLate?"#FFF3E0":on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:isLate?"#E65100":on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{on?(isLate?"○11時":"○"):"×"}</td>);})}
+                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;var st=(d.startTimes||{})[m.id];var isLate=m.id==="kambara"&&st==="11:00";var isPaid=st==="paid";return(<td key={m.id} onClick={function(){if(shiftData){if(on&&!isPaid){chgStartTime(di,m.id,"paid");}else if(isPaid){chgStartTime(di,m.id,null);toggleShiftAtt(di,m.id);}else{toggleShiftAtt(di,m.id);}}}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:10,background:isPaid?"#E8EAF6":isLate?"#FFF3E0":on?"#E8F5E9":"#fafafa",fontWeight:on?600:400,color:isPaid?"#5C6BC0":isLate?"#E65100":on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{isPaid?"有休":on?(isLate?"○11時":"○"):"×"}</td>);})}
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:700,color:d.att.length<=1?"#e53935":"#333"}}>{d.att.length}</td>
                     {isSecondTue2?(
-                      <td colSpan={slots.length} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:"#E3F2FD",fontWeight:600}}>
-                        {crew.length>0?crew.map(function(id){return findMember(id).name;}).join("・"):"未定"}
+                      <td colSpan={slots.length} style={{padding:"2px",border:"1px solid #eee",textAlign:"center",fontSize:10,background:"#E3F2FD"}}>
+                        {shiftData?<div style={{display:"flex",gap:4,justifyContent:"center",flexWrap:"wrap"}}>{d.att.map(function(id){var isCrew=crew.indexOf(id)>=0;return(<button key={id} onClick={function(){var nc=crew.slice();if(isCrew)nc=nc.filter(function(c){return c!==id;});else nc.push(id);var nd4=shiftData.map(function(dd,ii){if(ii!==di)return dd;return Object.assign({},dd,{secondTueCrew:nc});});setShiftData(nd4);setSavedShift(null);}} style={{padding:"3px 8px",borderRadius:6,border:isCrew?"2px solid #1565C0":"1px solid #ccc",background:isCrew?"#BBDEFB":"#fff",fontSize:10,fontWeight:isCrew?700:400,cursor:"pointer"}}>{findMember(id).name}</button>);})}</div>:<span style={{fontWeight:600}}>{crew.length>0?crew.map(function(id){return findMember(id).name;}).join("・"):"未定"}</span>}
                       </td>
                     ):isTueNoInj?(
                       <td colSpan={slots.length} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,background:"#f5f5f5",color:"#999"}}>休</td>
@@ -1152,7 +1206,9 @@ function App(){
     </div>);
   }
 
-  if(showDiary){return(<div style={{minHeight:"100vh",background:"#ECEFF1",padding:20}}><div style={{background:"#fff",borderRadius:16,padding:24,maxWidth:400,margin:"0 auto",boxShadow:"0 4px 20px rgba(0,0,0,0.1)"}}><h2 style={{fontSize:20,fontWeight:800,color:"#333",marginBottom:4,textAlign:"center"}}>{"\u{1F4DD}"} 業務日誌</h2><p style={{fontSize:13,color:"#888",textAlign:"center",marginBottom:24}}>今日の作業を記録</p>{[["ラック数",racks,setRacks],["束数",bundles,setBundles],["搬入回数",delivers,setDelivers]].map(function(item,idx){return(<div key={idx} style={{marginBottom:20}}><label style={{display:"block",fontSize:14,fontWeight:700,color:"#333",marginBottom:6}}>{item[0]}</label><input type="number" value={item[1]} onChange={function(e){item[2](e.target.value);}} style={{width:"100%",padding:"14px 16px",borderRadius:10,border:"2px solid #ddd",fontSize:20,fontWeight:700,textAlign:"center"}} min="0"/></div>);})}<div style={{marginBottom:24}}><label style={{display:"block",fontSize:14,fontWeight:700,color:"#333",marginBottom:6}}>メモ（任意）</label><textarea value={memo} onChange={function(e){setMemo(e.target.value);}} placeholder="特記事項" style={{width:"100%",padding:"12px 16px",borderRadius:10,border:"2px solid #ddd",fontSize:14,minHeight:60,resize:"vertical"}}/></div><button onClick={doCheckoutWithDiary} style={{width:"100%",padding:"16px",borderRadius:12,border:"none",background:"#C62828",color:"#fff",fontSize:18,fontWeight:800,cursor:"pointer",marginBottom:10}}>{"\u{1F3E0}"} 退勤を確定する</button><button onClick={doCheckoutSkip} style={{width:"100%",padding:"12px",borderRadius:10,border:"2px solid #ccc",background:"#fff",color:"#888",fontSize:14,fontWeight:600,cursor:"pointer"}}>スキップして退勤</button></div></div>);}
+  if(showDiary){return(<div style={{minHeight:"100vh",background:"#ECEFF1",padding:20}}><div style={{background:"#fff",borderRadius:16,padding:24,maxWidth:400,margin:"0 auto",boxShadow:"0 4px 20px rgba(0,0,0,0.1)"}}><h2 style={{fontSize:20,fontWeight:800,color:"#333",marginBottom:4,textAlign:"center"}}>{"\u{1F4DD}"} 業務日誌</h2><p style={{fontSize:13,color:"#888",textAlign:"center",marginBottom:16}}>今日の作業を記録</p>
+    <div style={{marginBottom:20}}><label style={{display:"block",fontSize:14,fontWeight:700,color:"#C62828",marginBottom:6}}>{"\u{23F0}"} 何時まで働きましたか？</label><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{["13:00","14:00","15:00","16:00"].map(function(t){return(<button key={t} onClick={function(){setEndTime(t);}} style={{flex:1,padding:"12px 8px",borderRadius:10,border:endTime===t?"3px solid #C62828":"2px solid #ddd",background:endTime===t?"#FFEBEE":"#fff",fontSize:16,fontWeight:endTime===t?800:500,color:endTime===t?"#C62828":"#666",cursor:"pointer"}}>{t}</button>);})}</div></div>
+    {[["ラック数",racks,setRacks],["束数",bundles,setBundles],["搬入回数",delivers,setDelivers]].map(function(item,idx){return(<div key={idx} style={{marginBottom:20}}><label style={{display:"block",fontSize:14,fontWeight:700,color:"#333",marginBottom:6}}>{item[0]}</label><input type="number" value={item[1]} onChange={function(e){item[2](e.target.value);}} style={{width:"100%",padding:"14px 16px",borderRadius:10,border:"2px solid #ddd",fontSize:20,fontWeight:700,textAlign:"center"}} min="0"/></div>);})}<div style={{marginBottom:24}}><label style={{display:"block",fontSize:14,fontWeight:700,color:"#333",marginBottom:6}}>メモ（任意）</label><textarea value={memo} onChange={function(e){setMemo(e.target.value);}} placeholder="特記事項" style={{width:"100%",padding:"12px 16px",borderRadius:10,border:"2px solid #ddd",fontSize:14,minHeight:60,resize:"vertical"}}/></div><button onClick={doCheckoutWithDiary} style={{width:"100%",padding:"16px",borderRadius:12,border:"none",background:"#C62828",color:"#fff",fontSize:18,fontWeight:800,cursor:"pointer",marginBottom:10}}>{"\u{1F3E0}"} 退勤を確定する（{endTime}まで）</button><button onClick={doCheckoutSkip} style={{width:"100%",padding:"12px",borderRadius:10,border:"2px solid #ccc",background:"#fff",color:"#888",fontSize:14,fontWeight:600,cursor:"pointer"}}>日誌スキップして退勤（{endTime}まで）</button></div></div>);}
 
   if(showOff){
     var hasWork=user&&user.workDays&&user.workDays.length>0;
