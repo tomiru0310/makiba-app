@@ -640,6 +640,33 @@ function App(){
     var nd3=shiftData.map(function(d,i){if(i!==di)return d;var na=d.att.slice();var idx=na.indexOf(mid);if(idx>=0)na.splice(idx,1);else na.push(mid);return Object.assign({},d,{att:na});});
     setShiftData(nd3);setSavedShift(null);
   }
+  function togglePaidLeave(di,mid){
+    /* ○出勤 → 有休 → ×休み → ○出勤 */
+    if(!shiftData)return;
+    var nd3=shiftData.map(function(d,i){
+      if(i!==di)return d;
+      var u=Object.assign({},d);
+      var na=u.att.slice();
+      var st=Object.assign({},u.startTimes||{});
+      var on=na.indexOf(mid)>=0;
+      var isPaid=st[mid]==="paid";
+      if(on&&!isPaid){
+        /* ○ → 有休: attから外し、startTimesにpaidを入れる */
+        na=na.filter(function(id){return id!==mid;});
+        st[mid]="paid";
+      }else if(!on&&isPaid){
+        /* 有休 → ×: paidを消す */
+        delete st[mid];
+      }else if(!on&&!isPaid){
+        /* × → ○: attに追加 */
+        na.push(mid);
+      }
+      u.att=na;
+      u.startTimes=st;
+      return u;
+    });
+    setShiftData(nd3);setSavedShift(null);
+  }
   function chgStartTime(di,mid,val){
     if(!shiftData)return;
     var nd3=shiftData.map(function(d,i){
@@ -1259,16 +1286,7 @@ function App(){
                   return(<tr key={d.day} style={{background:isTue?"#fafafa":""}}>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11}}>{d.day}</td>
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:600,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>
-                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;var st=(d.startTimes||{})[m.id];var isLate=m.id==="kambara"&&st==="11:00";var isPaid=st==="paid";return(<td key={m.id} onClick={function(){if(shiftData){if(on&&!isPaid){
-                      /* ○出勤 → 有休 */
-                      chgStartTime(di,m.id,"paid");toggleShiftAtt(di,m.id);
-                    }else if(isPaid&&!on){
-                      /* 有休 → ×休み */
-                      chgStartTime(di,m.id,null);
-                    }else if(!on&&!isPaid){
-                      /* ×休み → ○出勤 */
-                      toggleShiftAtt(di,m.id);
-                    }}}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:10,background:isPaid?"#E8EAF6":isLate?"#FFF3E0":on?"#E8F5E9":"#fafafa",fontWeight:on||isPaid?600:400,color:isPaid?"#5C6BC0":isLate?"#E65100":on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{isPaid?"有休":on?(isLate?"○11時":"○"):"×"}</td>);})}
+                    {WORKERS.map(function(m){var on=d.att.indexOf(m.id)>=0;var st=(d.startTimes||{})[m.id];var isLate=m.id==="kambara"&&st==="11:00";var isPaid=st==="paid";return(<td key={m.id} onClick={function(){if(shiftData){togglePaidLeave(di,m.id);}}} style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:10,background:isPaid?"#E8EAF6":isLate?"#FFF3E0":on?"#E8F5E9":"#fafafa",fontWeight:on||isPaid?600:400,color:isPaid?"#5C6BC0":isLate?"#E65100":on?"#333":"#ccc",cursor:shiftData?"pointer":"default"}}>{isPaid?"有休":on?(isLate?"○11時":"○"):"×"}</td>);})}
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:11,fontWeight:700,color:d.att.length<=1?"#e53935":"#333"}}>{d.att.length}</td>
                     {isSecondTue2?(
                       <td colSpan={slots.length} style={{padding:"2px",border:"1px solid #eee",textAlign:"center",fontSize:10,background:"#E3F2FD"}}>
