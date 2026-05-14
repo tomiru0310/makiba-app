@@ -402,13 +402,24 @@ function App(){
 
   function loadMyStamps(uid){
     db.collection("stamps")
-      .where("userId","==",uid)
       .where("dateKey","==",todayKey())
       .orderBy("time","desc")
       .onSnapshot(function(snap){
         var a=[];
-        snap.forEach(function(doc){a.push(doc.data());});
+        snap.forEach(function(doc){
+          var d=doc.data();
+          if(d.userId===uid) a.push(d);
+        });
         setStamps(a);
+      },function(err){
+        console.error("loadMyStamps error:",err);
+        // フォールバック: orderByなしで再試行
+        db.collection("stamps").where("dateKey","==",todayKey()).get().then(function(snap2){
+          var a2=[];
+          snap2.forEach(function(doc){var d=doc.data();if(d.userId===uid)a2.push(d);});
+          a2.sort(function(x,y){return(y.time||0)-(x.time||0);});
+          setStamps(a2);
+        });
       });
   }
 
@@ -505,6 +516,13 @@ function App(){
         var a=[];
         snap.forEach(function(doc){a.push(doc.data());});
         setAllSt(a);
+      },function(err){
+        console.error("loadAll stamps error:",err);
+        db.collection("stamps").where("dateKey","==",todayKey()).get().then(function(snap2){
+          var a2=[];snap2.forEach(function(doc){a2.push(doc.data());});
+          a2.sort(function(x,y){return(y.time||0)-(x.time||0);});
+          setAllSt(a2);
+        });
       });
     db.collection("diary")
       .where("dateKey","==",todayKey())
@@ -512,6 +530,12 @@ function App(){
         var a=[];
         snap.forEach(function(doc){a.push(doc.data());});
         setAllDiary(a);
+      },function(err){
+        console.error("loadAll diary error:",err);
+        db.collection("diary").where("dateKey","==",todayKey()).get().then(function(snap2){
+          var a2=[];snap2.forEach(function(doc){a2.push(doc.data());});
+          setAllDiary(a2);
+        });
       });
     // 今月の着火データ(月間集計用)
     var thisY=new Date().getFullYear();
@@ -526,6 +550,15 @@ function App(){
         var a=[];
         snap.forEach(function(doc){a.push(Object.assign({_docId:doc.id},doc.data()));});
         setMonthSt(a);
+      }).catch(function(err){
+        console.error("monthSt error:",err);
+        // フォールバック: 範囲クエリなし
+        db.collection("stamps").get().then(function(snap2){
+          var a2=[];snap2.forEach(function(doc){
+            var d=doc.data();
+            if(d.dateKey&&d.dateKey>=mStart&&d.dateKey<=mEnd)a2.push(Object.assign({_docId:doc.id},d));
+          });setMonthSt(a2);
+        });
       });
     loadAllOff();
     db.collection("shifts").doc(mk).get()
@@ -557,18 +590,33 @@ function App(){
   }
   function doStamp(a){
     var t=new Date();
-    db.collection("stamps").add({userId:user.id,userName:user.name,action:a.id,label:a.label,icon:a.icon,time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null});
+    db.collection("stamps").add({userId:user.id,userName:user.name,action:a.id,label:a.label,icon:a.icon,time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null}).then(function(){
+      // 手動リロード（onSnapshotが失敗する場合の保険）
+      db.collection("stamps").where("dateKey","==",todayKey()).get().then(function(snap){
+        var a2=[];snap.forEach(function(doc){var d=doc.data();if(d.userId===user.id)a2.push(d);});
+        a2.sort(function(x,y){return(y.time||0)-(x.time||0);});
+        setStamps(a2);
+      });
+    });
     setMsg(a.label+" を記録しました");setCnf(null);setTimeout(function(){setMsg(null);},3000);getGps();
+  }
+  function reloadMyStamps(){
+    if(!user)return;
+    db.collection("stamps").where("dateKey","==",todayKey()).get().then(function(snap){
+      var a2=[];snap.forEach(function(doc){var d=doc.data();if(d.userId===user.id)a2.push(d);});
+      a2.sort(function(x,y){return(y.time||0)-(x.time||0);});
+      setStamps(a2);
+    });
   }
   function doCheckoutWithDiary(){
     var t=new Date();
-    db.collection("stamps").add({userId:user.id,userName:user.name,action:"checkout",label:"退 勤",icon:"\u{1F3E0}",time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null,endTime:endTime});
+    db.collection("stamps").add({userId:user.id,userName:user.name,action:"checkout",label:"退 勤",icon:"\u{1F3E0}",time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null,endTime:endTime}).then(function(){reloadMyStamps();});
     db.collection("diary").add({userId:user.id,userName:user.name,dateKey:todayKey(),dateStr:fmtDate(t),racks:parseInt(racks)||0,bundles:parseInt(bundles)||0,delivers:parseInt(delivers)||0,memo:memo,time:t.getTime()});
     setMsg("退勤("+endTime+"まで) + 日誌を記録しました");setShowDiary(false);setRacks("0");setBundles("0");setDelivers("0");setMemo("");setEndTime("16:00");setTimeout(function(){setMsg(null);},3000);getGps();
   }
   function doCheckoutSkip(){
     var t=new Date();
-    db.collection("stamps").add({userId:user.id,userName:user.name,action:"checkout",label:"退 勤",icon:"\u{1F3E0}",time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null,endTime:endTime});
+    db.collection("stamps").add({userId:user.id,userName:user.name,action:"checkout",label:"退 勤",icon:"\u{1F3E0}",time:t.getTime(),timeStr:fmtTime(t),dateStr:fmtDate(t),dateKey:todayKey(),gpsLat:gps?gps.lat:null,gpsLng:gps?gps.lng:null,endTime:endTime}).then(function(){reloadMyStamps();});
     setMsg("退勤("+endTime+"まで)を記録しました");setShowDiary(false);setEndTime("16:00");setTimeout(function(){setMsg(null);},3000);getGps();
   }
 
@@ -764,7 +812,7 @@ function App(){
 
   if(page==="select"){return(<div style={greenBg}><div style={{fontSize:13,color:"#A5D6A7",letterSpacing:3,marginBottom:8}}>MAKIBA FACTORY</div><h1 style={{fontSize:32,fontWeight:900,color:"#fff",marginBottom:4}}>薪 工 場</h1><p style={{fontSize:16,color:"#C8E6C9",marginBottom:40}}>出退勤管理</p><div style={{width:"100%",maxWidth:400}}><p style={{color:"#E8F5E9",fontSize:16,marginBottom:16,textAlign:"center",fontWeight:600}}>名前を選んでください</p>{MEMBERS.map(function(m){return(<button key={m.id} onClick={function(){setSelUser(m);setPin("");setPage("pin");}} style={{width:"100%",padding:"20px 24px",marginBottom:10,borderRadius:14,border:"none",background:"rgba(255,255,255,0.18)",color:"#fff",fontSize:22,fontWeight:800,cursor:"pointer",textAlign:"center",letterSpacing:2}}>{m.name}</button>);})}<button onClick={function(){setPage("admin_pin");setPin("");setMsg(null);}} style={{width:"100%",padding:"14px",marginTop:20,borderRadius:10,border:"2px solid #A5D6A7",background:"transparent",color:"#A5D6A7",fontSize:14,fontWeight:600,cursor:"pointer"}}>{"\u{1F512}"} 管理者ログイン</button></div></div>);}
   if(page==="pin"&&selUser){return(<div style={greenBg}><p style={{color:"#fff",fontSize:22,fontWeight:800,marginBottom:4}}>{selUser.name} さん</p><p style={{color:"#C8E6C9",fontSize:16,marginBottom:24}}>4桁の暗証番号を入力</p>{pinPad(function(np){if(np===selUser.pin)login(selUser);else{setPin("");setMsg("暗証番号が違います");setTimeout(function(){setMsg(null);},2000);}},function(){setSelUser(null);setPin("");setMsg(null);setPage("select");})}</div>);}
-  if(page==="admin_pin"){return(<div style={Object.assign({},greenBg,{justifyContent:"center"})}><h2 style={{color:"#fff",fontSize:24,fontWeight:800,marginBottom:8}}>{"\u{1F512}"} 管理者ログイン</h2><p style={{color:"#C8E6C9",fontSize:14,marginBottom:24}}>管理者PINを入力</p>{pinPad(function(np){if(np==="0000"){setPage("admin");loadAll();setPin("");}else{setPin("");setMsg("PINが違います");setTimeout(function(){setMsg(null);},2000);}},function(){setPage("select");setPin("");setMsg(null);})}</div>);}
+  if(page==="admin_pin"){return(<div style={Object.assign({},greenBg,{justifyContent:"center"})}><h2 style={{color:"#fff",fontSize:24,fontWeight:800,marginBottom:8}}>{"\u{1F512}"} 管理者ログイン</h2><p style={{color:"#C8E6C9",fontSize:14,marginBottom:24}}>管理者PINを入力</p>{pinPad(function(np){if(np==="0310"){setPage("admin");loadAll();setPin("");}else{setPin("");setMsg("PINが違います");setTimeout(function(){setMsg(null);},2000);}},function(){setPage("select");setPin("");setMsg(null);})}</div>);}
 
   // === 管理者 ===
   if(page==="admin"){
