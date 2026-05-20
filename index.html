@@ -998,6 +998,7 @@ function App(){
             });
             Object.keys(byDay).forEach(function(k){
               var v=byDay[k];
+              if(!igFinal[v.uid])igFinal[v.uid]={goldenOnly:0,combo:0,motoyuOnly:0,goldenTotal:0,motoyuTotal:0};
               if(v.g&&v.m){
                 igFinal[v.uid].combo++;
                 igFinal[v.uid].goldenTotal++;
