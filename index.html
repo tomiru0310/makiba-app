@@ -59,7 +59,7 @@ function mkKey(y,m){return y+"-"+pad(m)}
 function nextMonth(){var d=new Date();var y=d.getFullYear();var m=d.getMonth()+2;if(m>12){m-=12;y++;}return{year:y,month:m}}
 function curMonth(){var d=new Date();return{year:d.getFullYear(),month:d.getMonth()+1}}
 function getNth(y,m,wd,n){var c=0;for(var d=1;d<=dim(y,m);d++){if(doW(y,m,d)===wd){c++;if(c===n)return d;}}return -1}
-function findMember(id){for(var i=0;i<MEMBERS.length;i++){if(MEMBERS[i].id===id)return MEMBERS[i];}return{id:id,name:id,workDays:[],gDays:[],mDays:[]};}
+function findMember(id){for(var i=0;i<MEMBERS.length;i++){if(MEMBERS[i].id===id)return MEMBERS[i];}return{id:id,name:id,pin:"0000",workDays:[],gDays:[],mDays:[],type:"part",fork:false,combo:false};}
 function getIgniteDays(m){var all=[];(m.gDays||[]).forEach(function(d){if(all.indexOf(d)<0)all.push(d);});(m.mDays||[]).forEach(function(d){if(all.indexOf(d)<0)all.push(d);});return all;}
 
 function generateShift(y,m,offByM,ignOffByM,season,lateByM){
