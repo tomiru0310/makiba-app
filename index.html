@@ -806,23 +806,20 @@ function App(){
 
   // === 管理者 ===
   if(page==="admin"){
+    console.log("Admin render start");
+    try{
     var byM={};MEMBERS.forEach(function(m){byM[m.id]=[];});allSt.forEach(function(s){if(byM[s.userId])byM[s.userId].push(s);});
     var diaryByM={};MEMBERS.forEach(function(m){diaryByM[m.id]=null;});allDiary.forEach(function(d){diaryByM[d.userId]=d;});
     var offByM={};MEMBERS.forEach(function(m){offByM[m.id]=[];});allOff.forEach(function(o){if(o.userId&&offByM[o.userId]!==undefined)offByM[o.userId]=o.days||[];});
     var lateByM={};MEMBERS.forEach(function(m){lateByM[m.id]=[];});allOff.forEach(function(o){if(o.userId&&lateByM[o.userId]!==undefined&&o.lateDays)lateByM[o.userId]=o.lateDays;});
     var ignOffByM={};MEMBERS.forEach(function(m){ignOffByM[m.id]=[];});allIgnOff.forEach(function(o){if(o.userId&&ignOffByM[o.userId]!==undefined)ignOffByM[o.userId]=o.days||[];});
     var displayShift=shiftData||savedShift||null;
-    // 保存済みシフトがあってshiftDataがない場合、shiftDataにコピーして編集可能にする
-    if(!shiftData&&savedShift){
-      // 次のレンダリングでshiftDataにセット（直接呼ぶとループするのでuseEffectの代わりにsetTimeout）
-      setTimeout(function(){setShiftData(savedShift);},0);
-    }
 
     return(<div style={{minHeight:"100vh",background:"#ECEFF1"}}>
       <div style={{background:"linear-gradient(135deg,#1B5E20,#2E7D32)",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#A5D6A7",letterSpacing:2}}>MAKIBA FACTORY</div><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{"\u{1F512}"} 管理者画面</div></div><div style={{textAlign:"right"}}><div style={{fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'Courier New',monospace"}}>{fmtTime(now)}</div><div style={{fontSize:12,color:"#C8E6C9"}}>{fmtDate(now)}</div></div></div>
       {msg?<div style={{padding:"10px 20px",background:"#1B5E20",color:"#fff",fontSize:14,fontWeight:700,textAlign:"center"}}>{"\u2713"} {msg}</div>:null}
       <div style={{display:"flex",background:"#fff",borderBottom:"2px solid #eee"}}>
-        {[["stamps","打刻"],["offdays","\u{1F4C5} 休み"],["shift","\u{1F4CB} シフト"]].map(function(t){var active=adminTab===t[0];return(<button key={t[0]} onClick={function(){setAdminTab(t[0]);if(t[0]==="offdays"||t[0]==="shift")loadAllOff();}} style={{flex:1,padding:"12px",border:"none",background:active?"#E8F5E9":"#fff",fontWeight:active?700:400,fontSize:13,cursor:"pointer",color:active?"#2E7D32":"#999",borderBottom:active?"3px solid #2E7D32":"none"}}>{t[1]}</button>);})}
+        {[["stamps","打刻"],["offdays","\u{1F4C5} 休み"],["shift","\u{1F4CB} シフト"]].map(function(t){var active=adminTab===t[0];return(<button key={t[0]} onClick={function(){setAdminTab(t[0]);if(t[0]==="offdays"||t[0]==="shift")loadAllOff();if(t[0]==="shift"&&!shiftData&&savedShift)setShiftData(savedShift);}} style={{flex:1,padding:"12px",border:"none",background:active?"#E8F5E9":"#fff",fontWeight:active?700:400,fontSize:13,cursor:"pointer",color:active?"#2E7D32":"#999",borderBottom:active?"3px solid #2E7D32":"none"}}>{t[1]}</button>);})}
       </div>
       <div style={{padding:16}}>
         {adminTab==="stamps"?(<div><h2 style={{fontSize:16,fontWeight:700,color:"#333",marginBottom:12}}>今日の打刻・日誌</h2>
@@ -1385,6 +1382,10 @@ function App(){
       </div>
       <div style={{padding:"0 16px 40px",textAlign:"center"}}><button onClick={function(){setPage("select");setPin("");}} style={{padding:"14px 40px",borderRadius:10,border:"2px solid #bbb",background:"#fff",color:"#666",fontSize:16,fontWeight:600,cursor:"pointer"}}>ログアウト</button></div>
     </div>);
+    }catch(e){
+      console.error("Admin render error:",e);
+      return(<div style={{padding:40,textAlign:"center"}}><h2 style={{color:"#C62828"}}>管理者画面でエラーが発生しました</h2><p style={{color:"#666",marginTop:12}}>{e.message}</p><pre style={{textAlign:"left",background:"#f5f5f5",padding:16,borderRadius:8,marginTop:12,fontSize:11,overflow:"auto",maxHeight:300}}>{e.stack}</pre><button onClick={function(){setPage("select");setPin("");}} style={{marginTop:20,padding:"14px 40px",borderRadius:10,border:"2px solid #bbb",background:"#fff",color:"#666",fontSize:16,fontWeight:600,cursor:"pointer"}}>ログアウト</button></div>);
+    }
   }
 
   if(showDiary){return(<div style={{minHeight:"100vh",background:"#ECEFF1",padding:20}}><div style={{background:"#fff",borderRadius:16,padding:24,maxWidth:400,margin:"0 auto",boxShadow:"0 4px 20px rgba(0,0,0,0.1)"}}><h2 style={{fontSize:20,fontWeight:800,color:"#333",marginBottom:4,textAlign:"center"}}>{"\u{1F4DD}"} 業務日誌</h2><p style={{fontSize:13,color:"#888",textAlign:"center",marginBottom:16}}>今日の作業を記録</p>
