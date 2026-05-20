@@ -34,10 +34,9 @@ var useState=React.useState;
 var useEffect=React.useEffect;
 var DJ=["日","月","火","水","木","金","土"];
 var MEMBERS=[
-  {id:"hamabe",name:"浜辺",pin:"1111",workDays:[0,3,4,5,6],type:"salary",fork:true,combo:true,gDays:[],mDays:[]},
-  {id:"kambara",name:"神原",pin:"2222",workDays:[0,1,2,6],type:"part",fork:true,combo:false,gDays:[6,0],mDays:[1,6,0]},
+  {id:"kambara",name:"神原",pin:"2222",workDays:[0,2,6],type:"part",fork:true,combo:false,gDays:[6,0],mDays:[6,0]},
   {id:"yamamoto",name:"山本",pin:"3333",workDays:[1,2,4,5],type:"part",fork:true,combo:true,gDays:[],mDays:[]},
-  {id:"tomioka",name:"富岡",pin:"4444",workDays:[1,3,5],type:"salary",fork:false,combo:false,gDays:[4,5],mDays:[5]},
+  {id:"tomioka",name:"富岡",pin:"4444",workDays:[1,3,5],type:"salary",fork:true,combo:true,gDays:[4,5],mDays:[5]},
   {id:"gushiken",name:"具志堅",pin:"5555",workDays:[],type:"ignite",fork:false,combo:false,gDays:[1,3],mDays:[]},
   {id:"handa",name:"半田",pin:"6666",workDays:[],type:"ignite",fork:false,combo:false,gDays:[],mDays:[2]}
 ];
@@ -75,7 +74,6 @@ function generateShift(y,m,offByM,ignOffByM,season,lateByM){
     for(var i=0;i<WORKERS.length;i++){
       var mb=WORKERS[i];
       var sched=mb.workDays.indexOf(w)>=0;
-      if(mb.id==="hamabe"&&!sched&&d===s2) sched=true;
       var off=offByM[mb.id]||[];
       if(sched&&off.indexOf(d)<0) att.push(mb.id);
     }
@@ -86,15 +84,15 @@ function generateShift(y,m,offByM,ignOffByM,season,lateByM){
     }
     days.push({day:d,dow:w,att:att,forced:[],startTimes:startTimes});
   }
-  // 2. 出勤者ゼロの日→社員(浜辺)優先、次に具志堅
+  // 2. 出勤者ゼロの日→社員(富岡)優先、次に具志堅
   for(var d1b=0;d1b<days.length;d1b++){
     var dd1=days[d1b];
     if(dd1.att.length===0){
-      // 浜辺が空いているか(社員優先)
-      var hamOff=offByM["hamabe"]||[];
-      if(hamOff.indexOf(dd1.day)<0){
-        dd1.att.push("hamabe");
-        dd1.forced.push("浜辺(出勤者ゼロ)");
+      // 富岡が空いているか(社員優先)
+      var tomOff=offByM["tomioka"]||[];
+      if(tomOff.indexOf(dd1.day)<0){
+        dd1.att.push("tomioka");
+        dd1.forced.push("富岡(出勤者ゼロ)");
       }else{
         // 具志堅が空いているか
         var gushiWorkOff=ignOffByM["gushiken"]||[];
@@ -159,11 +157,10 @@ function generateShift(y,m,offByM,ignOffByM,season,lateByM){
     ws=we+1;
   }
   // 5. 着火割り当て
-  // □元をまとめる + 浜辺・神原・具志堅で均等分散
-  // 富岡・半田は固定曜日パターン
+  // 富岡・神原・具志堅・半田で分散
   var ignCount={};
   MEMBERS.forEach(function(m2){ignCount[m2.id]=0;});
-  var distIds=["hamabe","kambara","gushiken"];
+  var distIds=["tomioka","kambara","gushiken"];
 
   for(var d3=0;d3<days.length;d3++){
     var dd3=days[d3];var w3=dd3.dow;
@@ -174,15 +171,8 @@ function generateShift(y,m,offByM,ignOffByM,season,lateByM){
     // 空き判定
     var avMap={};
     MEMBERS.forEach(function(m3){
-      if(m3.id==="hamabe"){
-        // 浜辺は工場の休み=着火の休み
-        var woff=offByM["hamabe"]||[];
-        avMap[m3.id]=woff.indexOf(dd3.day)<0
-          &&m3.workDays.indexOf(w3)>=0;
-      }else{
-        var ioff3=ignOffByM[m3.id]||[];
-        avMap[m3.id]=ioff3.indexOf(dd3.day)<0;
-      }
+      var ioff3=ignOffByM[m3.id]||[];
+      avMap[m3.id]=ioff3.indexOf(dd3.day)<0;
     });
 
     // 富岡・半田の固定曜日チェック
@@ -1317,7 +1307,7 @@ function App(){
                 <thead><tr>
                   <th style={{padding:"6px 4px",background:"#1a237e",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>日</th>
                   <th style={{padding:"6px 4px",background:"#1a237e",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>曜</th>
-                  {WORKERS.map(function(m){return(<th key={m.id} style={{padding:"6px 4px",background:m.id==="hamabe"?"#7B1FA2":m.id==="kambara"?"#43A047":m.id==="yamamoto"?"#FB8C00":"#1E88E5",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>{m.name}</th>);})}
+                  {WORKERS.map(function(m){return(<th key={m.id} style={{padding:"6px 4px",background:m.id==="kambara"?"#43A047":m.id==="yamamoto"?"#FB8C00":"#1E88E5",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>{m.name}</th>);})}
                   <th style={{padding:"6px 4px",background:"#1a237e",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>人数</th>
                   {(season==="winter"?["9:00","11:30","14:30","17:00","19:30"]:["9:00","11:30","14:30","17:00"]).map(function(t,ti){
                     return(<th key={ti} style={{padding:"6px 4px",background:t==="14:30"?"#C62828":"#FF6F00",color:"#fff",fontSize:9,border:"1px solid #ccc"}}>{t}{t==="14:30"?"★":""}</th>);
@@ -1362,7 +1352,7 @@ function App(){
               <div style={{padding:"6px 12px",fontSize:9,color:"#888"}}>★14:30=火水以外は社員必須 / 火曜(第2除く)=投入休 / 17:00バイト=残業20分</div>
             </div>
             <div style={{background:"#fff",borderRadius:12,marginBottom:12,overflowX:"auto"}}><div style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #eee"}}><span style={{fontWeight:700,fontSize:14,color:"#1a237e"}}>着火シフト</span><button onClick={function(){
-              var igCols=[{id:"hamabe",name:"浜辺",bg:"#1565c0",cellBg:"#D6EAF8",tc:"#fff"},{id:"kambara",name:"神原",bg:"#43A047",cellBg:"#D5F5E3",tc:"#fff"},{id:"tomioka",name:"トミル",bg:"#00ACC1",cellBg:"#D1F2EB",tc:"#fff"},{id:"gushiken",name:"具志堅",bg:"#FDD835",cellBg:"#FEF9E7",tc:"#333"},{id:"handa",name:"半田",bg:"#E65100",cellBg:"#FDEBD0",tc:"#fff"}];
+              var igCols=[{id:"kambara",name:"神原",bg:"#43A047",cellBg:"#D5F5E3",tc:"#fff"},{id:"tomioka",name:"トミル",bg:"#00ACC1",cellBg:"#D1F2EB",tc:"#fff"},{id:"gushiken",name:"具志堅",bg:"#FDD835",cellBg:"#FEF9E7",tc:"#333"},{id:"handa",name:"半田",bg:"#E65100",cellBg:"#FDEBD0",tc:"#fff"}];
               var colW=[90,40,70,70,70,70,70];var totalW=0;for(var ci=0;ci<colW.length;ci++)totalW+=colW[ci];
               var rowH=28;var headH=34;var titleH=36;var rows=displayShift.length;var canH=titleH+headH+rows*rowH+4;
               var canvas=document.createElement("canvas");canvas.width=totalW*2;canvas.height=canH*2;
@@ -1371,7 +1361,7 @@ function App(){
               ctx.fillStyle="#1a237e";ctx.font="bold 14px 'Noto Sans JP',sans-serif";ctx.textAlign="center";
               ctx.fillText("着火シフト "+nxM.year+"年"+nxM.month+"月",totalW/2,22);
               var y0=titleH;
-              var headers=["日","曜","浜辺","神原","トミル","具志堅","半田"];
+              var headers=["日","曜","神原","トミル","具志堅","半田"];
               var headerBgs=["#2E7D32","#2E7D32","#1565c0","#43A047","#00ACC1","#FDD835","#E65100"];
               var headerTcs=["#fff","#fff","#fff","#fff","#fff","#333","#fff"];
               var x=0;ctx.font="bold 11px 'Noto Sans JP',sans-serif";
@@ -1387,8 +1377,8 @@ function App(){
               }
               var link=document.createElement("a");link.download="着火シフト_"+nxM.year+"年"+nxM.month+"月.png";link.href=canvas.toDataURL("image/png");link.click();
             }} style={{padding:"6px 16px",borderRadius:8,border:"none",background:"#1565c0",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>{"\u{1F4F7}"} 画像保存</button></div>
-              <table style={{borderCollapse:"collapse",width:"100%",fontSize:11}}><thead><tr><th style={{padding:"6px",background:"#2E7D32",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>日</th><th style={{padding:"6px",background:"#2E7D32",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>曜</th><th style={{padding:"6px",background:"#1565c0",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>浜辺</th><th style={{padding:"6px",background:"#43A047",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>神原</th><th style={{padding:"6px",background:"#00ACC1",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>トミル</th><th style={{padding:"6px",background:"#FDD835",color:"#333",fontSize:10,border:"1px solid #ccc"}}>具志堅</th><th style={{padding:"6px",background:"#E65100",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>半田</th></tr></thead>
-              <tbody>{displayShift.map(function(d,di){var igMap={};if(d.gi&&d.mi&&d.gi===d.mi)igMap[d.gi]="□元";else{if(d.gi)igMap[d.gi]="□";if(d.mi)igMap[d.mi]="元";}var cols=["hamabe","kambara","tomioka","gushiken","handa"];var bgs=["#D6EAF8","#D5F5E3","#D1F2EB","#FEF9E7","#FDEBD0"];return(<tr key={d.day}><td style={{padding:"4px 6px",border:"1px solid #ddd",background:"#E8F5E9",textAlign:"center",fontSize:11,fontWeight:600}}>{nxM.month}/{d.day}</td><td style={{padding:"4px",border:"1px solid #ddd",background:"#E8F5E9",textAlign:"center",fontSize:11,fontWeight:700,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>{cols.map(function(id,ci){var val=igMap[id]||"";return(<td key={id} style={{padding:"2px",border:"1px solid #ddd",background:bgs[ci],textAlign:"center"}}>{shiftData?<select value={val} onChange={function(e){chgIgnite(di,id,e.target.value);}} style={{border:"none",background:"transparent",fontSize:12,fontWeight:700,textAlign:"center",width:"100%",cursor:"pointer",color:"#333"}}><option value=""></option><option value="□">□</option><option value="元">元</option><option value="□元">□元</option></select>:<span style={{fontSize:12,fontWeight:700}}>{val}</span>}</td>);})}</tr>);})}</tbody></table></div>
+              <table style={{borderCollapse:"collapse",width:"100%",fontSize:11}}><thead><tr><th style={{padding:"6px",background:"#2E7D32",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>日</th><th style={{padding:"6px",background:"#2E7D32",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>曜</th><th style={{padding:"6px",background:"#43A047",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>神原</th><th style={{padding:"6px",background:"#00ACC1",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>トミル</th><th style={{padding:"6px",background:"#FDD835",color:"#333",fontSize:10,border:"1px solid #ccc"}}>具志堅</th><th style={{padding:"6px",background:"#E65100",color:"#fff",fontSize:10,border:"1px solid #ccc"}}>半田</th></tr></thead>
+              <tbody>{displayShift.map(function(d,di){var igMap={};if(d.gi&&d.mi&&d.gi===d.mi)igMap[d.gi]="□元";else{if(d.gi)igMap[d.gi]="□";if(d.mi)igMap[d.mi]="元";}var cols=["kambara","tomioka","gushiken","handa"];var bgs=["#D5F5E3","#D1F2EB","#FEF9E7","#FDEBD0"];return(<tr key={d.day}><td style={{padding:"4px 6px",border:"1px solid #ddd",background:"#E8F5E9",textAlign:"center",fontSize:11,fontWeight:600}}>{nxM.month}/{d.day}</td><td style={{padding:"4px",border:"1px solid #ddd",background:"#E8F5E9",textAlign:"center",fontSize:11,fontWeight:700,color:d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"}}>{DJ[d.dow]}</td>{cols.map(function(id,ci){var val=igMap[id]||"";return(<td key={id} style={{padding:"2px",border:"1px solid #ddd",background:bgs[ci],textAlign:"center"}}>{shiftData?<select value={val} onChange={function(e){chgIgnite(di,id,e.target.value);}} style={{border:"none",background:"transparent",fontSize:12,fontWeight:700,textAlign:"center",width:"100%",cursor:"pointer",color:"#333"}}><option value=""></option><option value="□">□</option><option value="元">元</option><option value="□元">□元</option></select>:<span style={{fontSize:12,fontWeight:700}}>{val}</span>}</td>);})}</tr>);})}</tbody></table></div>
 
           </div>):<div style={{background:"#fff",borderRadius:12,padding:32,textAlign:"center",color:"#999"}}>「シフト自動生成」ボタンを押してください</div>}
         </div>):null}
