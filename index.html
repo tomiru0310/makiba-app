@@ -611,25 +611,31 @@ function App(){
   }
 
   function toggleOff(day){
+    console.log("toggleOff called: day="+day+" user="+user.id+" isKambara="+(user.id==="kambara"));
     // 神原の場合: 通常 → 11時出勤 → 休み → 通常
     if(user&&user.id==="kambara"){
       var isLate=lateDays.indexOf(day)>=0;
       var isOff=offDays.indexOf(day)>=0;
+      console.log("kambara: isLate="+isLate+" isOff="+isOff+" lateDays="+JSON.stringify(lateDays)+" offDays="+JSON.stringify(offDays));
       var newLate=lateDays.slice();
       var newOff=offDays.slice();
       if(!isLate&&!isOff){
         // 通常 → 11時出勤
         newLate.push(day);
+        console.log("→ 11時出勤に変更: day="+day);
       }else if(isLate&&!isOff){
         // 11時出勤 → 休み
         newLate=newLate.filter(function(d){return d!==day;});
         newOff.push(day);
+        console.log("→ 休みに変更: day="+day);
       }else{
         // 休み → 通常
         newOff=newOff.filter(function(d){return d!==day;});
+        console.log("→ 通常に戻す: day="+day);
       }
       setLateDays(newLate);setOffDays(newOff);
-      db.collection("offdays").doc(user.id+"_"+mk).set({userId:user.id,userName:user.name,monthKey:mk,days:newOff,lateDays:newLate,updated:new Date().getTime()});
+      console.log("Saving to Firestore: doc="+user.id+"_"+mk+" newOff="+JSON.stringify(newOff)+" newLate="+JSON.stringify(newLate));
+      db.collection("offdays").doc(user.id+"_"+mk).set({userId:user.id,userName:user.name,monthKey:mk,days:newOff,lateDays:newLate,updated:new Date().getTime()}).then(function(){console.log("Saved OK");}).catch(function(e){console.error("Save error:",e);});
       return;
     }
     var nd2;if(offDays.indexOf(day)>=0)nd2=offDays.filter(function(d){return d!==day;});else nd2=offDays.concat([day]);
