@@ -36,7 +36,7 @@ var DJ=["日","月","火","水","木","金","土"];
 var MEMBERS=[
   {id:"kambara",name:"神原",pin:"2222",workDays:[0,2,6],type:"part",fork:true,combo:false,gDays:[6,0],mDays:[6,0]},
   {id:"yamamoto",name:"山本",pin:"3333",workDays:[1,2,4,5],type:"part",fork:true,combo:true,gDays:[],mDays:[]},
-  {id:"tomioka",name:"富岡",pin:"4444",workDays:[2,4,5],type:"salary",fork:true,combo:true,gDays:[4,5],mDays:[5]},
+  {id:"tomioka",name:"富岡",pin:"4444",workDays:[2,4,5,6],type:"salary",fork:true,combo:true,gDays:[4,5],mDays:[5]},
   {id:"gushiken",name:"具志堅",pin:"5555",workDays:[],type:"ignite",fork:false,combo:false,gDays:[1,3],mDays:[]},
   {id:"handa",name:"半田",pin:"6666",workDays:[],type:"ignite",fork:false,combo:false,gDays:[],mDays:[2]}
 ];
@@ -285,15 +285,19 @@ function generateShift(y,m,offByM,ignOffByM,season,lateByM){
       }
     }else{
       // 通常日
+      // 神原が11時出勤の場合、9:00スロットから除外
+      var kamLateToday=(dd3.startTimes||{})["kambara"]==="11:00";
+      var partFor9=kamLateToday?part.filter(function(id){return id!=="kambara";}):part;
       for(var si3=0;si3<injSlots.length;si3++){
+        // 9:00スロットは11時出勤の神原を除外した候補で
+        var curPart=(si3===0&&kamLateToday)?partFor9:part;
         if(si3===2&&!isTue&&!isWed){
           // 14:30(3回目)→火水以外は必ず社員
           if(salary.length>0){
             injArr.push(salary[0]);
           }else{
-            // 社員がいない日→アルバイトで埋める
-            if(part.length>0){
-              injArr.push(part[0]);
+            if(curPart.length>0){
+              injArr.push(curPart[0]);
             }else{injArr.push(null);}
           }
         }else{
@@ -302,9 +306,9 @@ function generateShift(y,m,offByM,ignOffByM,season,lateByM){
             injArr.push(
               salary[si3%salary.length]
             );
-          }else if(part.length>0){
+          }else if(curPart.length>0){
             injArr.push(
-              part[si3%part.length]
+              curPart[si3%curPart.length]
             );
           }else{injArr.push(null);}
         }
@@ -1255,7 +1259,7 @@ function App(){
                   ctx.fillText("工場シフト "+nxM.year+"年"+nxM.month+"月 ("+(season==="winter"?"冬場5回":"夏場4回")+")",totalW2/2,18);
                   var y0=titleH2;var x=0;
                   var hds=["日","曜"];for(var wi2=0;wi2<wNames.length;wi2++)hds.push(wNames[wi2]);hds.push("人数");for(var ii3=0;ii3<injS.length;ii3++)hds.push(injS[ii3]);hds.push("残業");hds.push("備考");
-                  var hBgs=["#1a237e","#1a237e","#7B1FA2","#43A047","#FB8C00","#1E88E5","#1a237e"];for(var ii4=0;ii4<injS.length;ii4++)hBgs.push(injS[ii4]==="14:30"?"#C62828":"#FF6F00");hBgs.push("#1a237e");hBgs.push("#546E7A");
+                  var hBgs=["#1a237e","#1a237e"];for(var wi4=0;wi4<wNames.length;wi4++){hBgs.push(WORKERS[wi4].id==="kambara"?"#43A047":WORKERS[wi4].id==="yamamoto"?"#FB8C00":"#1E88E5");}hBgs.push("#1a237e");for(var ii4=0;ii4<injS.length;ii4++)hBgs.push(injS[ii4]==="14:30"?"#C62828":"#FF6F00");hBgs.push("#1a237e");hBgs.push("#546E7A");
                   ctx.font="bold 8px sans-serif";
                   for(var hi=0;hi<hds.length;hi++){ctx.fillStyle=hBgs[hi]||"#1a237e";ctx.fillRect(x,y0,colW2[hi],headH2);ctx.strokeStyle="#ccc";ctx.strokeRect(x,y0,colW2[hi],headH2);ctx.fillStyle="#fff";ctx.fillText(hds[hi],x+colW2[hi]/2,y0+headH2/2+3);x+=colW2[hi];}
                   var s2img=getNth(nxM.year,nxM.month,2,2);
@@ -1263,12 +1267,12 @@ function App(){
                     var d=displayShift[ri];var ry=y0+headH2+ri*rowH2;var x2=0;
                     ctx.font="bold 8px sans-serif";
                     var isTue2=d.dow===2;var isS2=isTue2&&d.day===s2img;
-                    // 日,曜,出勤○×,人数
-                    var baseVals=[String(d.day),DJ[d.dow]];for(var wi3=0;wi3<WORKERS.length;wi3++)baseVals.push(d.att.indexOf(WORKERS[wi3].id)>=0?"○":"×");baseVals.push(String(d.att.length));
+                    // 日,曜,出勤○×(11時対応),人数
+                    var baseVals=[String(d.day),DJ[d.dow]];for(var wi3=0;wi3<WORKERS.length;wi3++){var wid3=WORKERS[wi3].id;var on3=d.att.indexOf(wid3)>=0;var st3=(d.startTimes||{})[wid3];var isPaid3=st3==="paid";var isLate3=wid3==="kambara"&&st3==="11:00";baseVals.push(isPaid3?"有休":on3?(isLate3?"○11時":"○"):"×");}baseVals.push(String(d.att.length));
                     for(var bvi=0;bvi<baseVals.length;bvi++){
-                      var bg="#fff";if(bvi<2)bg="#f5f5f5";else if(bvi<2+WORKERS.length){bg=d.att.indexOf(WORKERS[bvi-2].id)>=0?"#E8F5E9":"#fafafa";}else bg="#f5f5f5";
+                      var bg="#fff";if(bvi<2)bg="#f5f5f5";else if(bvi<2+WORKERS.length){var wid4=WORKERS[bvi-2].id;var st4=(d.startTimes||{})[wid4];bg=st4==="paid"?"#E8EAF6":st4==="11:00"?"#FFF3E0":d.att.indexOf(wid4)>=0?"#E8F5E9":"#fafafa";}else bg="#f5f5f5";
                       ctx.fillStyle=bg;ctx.fillRect(x2,ry,colW2[bvi],rowH2);ctx.strokeStyle="#eee";ctx.strokeRect(x2,ry,colW2[bvi],rowH2);
-                      ctx.fillStyle=bvi===1?(d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"):(baseVals[bvi]==="×"?"#ccc":"#333");
+                      ctx.fillStyle=bvi===1?(d.dow===0?"#e53935":d.dow===6?"#1565c0":"#333"):(baseVals[bvi]==="×"?"#ccc":baseVals[bvi]==="有休"?"#5C6BC0":baseVals[bvi]==="○11時"?"#E65100":"#333");
                       ctx.fillText(baseVals[bvi],x2+colW2[bvi]/2,ry+rowH2/2+3);x2+=colW2[bvi];
                     }
                     // 投入スロット
@@ -1349,7 +1353,7 @@ function App(){
                       })
                     )}
                     <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:10,color:d.hasOT?"#e53935":"#999"}}>{d.hasOT?"20分":"-"}</td>
-                    <td style={{padding:"4px",border:"1px solid #eee",textAlign:"center",fontSize:10,color:isSecondTue2?"#1565c0":"#666"}}>{d.note||""}</td>
+                    <td style={{padding:"2px",border:"1px solid #eee",textAlign:"center",fontSize:10}}>{shiftData?<input type="text" value={d.note||""} onChange={function(e){var nd5=shiftData.map(function(dd,ii){if(ii!==di)return dd;return Object.assign({},dd,{note:e.target.value});});setShiftData(nd5);setSavedShift(null);}} style={{border:"none",background:"transparent",fontSize:9,width:"100%",textAlign:"center"}} placeholder="メモ"/>:<span style={{color:isSecondTue2?"#1565c0":"#666"}}>{d.note||""}</span>}</td>
                   </tr>);
                 })}</tbody>
               </table>
