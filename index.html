@@ -689,7 +689,6 @@ function App(){
     setShiftData(nd3);setSavedShift(null);
   }
   function togglePaidLeave(di,mid){
-    /* ○出勤 → 有休 → ×休み → ○出勤 */
     if(!shiftData)return;
     var nd3=shiftData.map(function(d,i){
       if(i!==di)return d;
@@ -698,16 +697,32 @@ function App(){
       var st=Object.assign({},u.startTimes||{});
       var on=na.indexOf(mid)>=0;
       var isPaid=st[mid]==="paid";
-      if(on&&!isPaid){
-        /* ○ → 有休: attから外し、startTimesにpaidを入れる */
-        na=na.filter(function(id){return id!==mid;});
-        st[mid]="paid";
-      }else if(!on&&isPaid){
-        /* 有休 → ×: paidを消す */
-        delete st[mid];
-      }else if(!on&&!isPaid){
-        /* × → ○: attに追加 */
-        na.push(mid);
+      var isLate=st[mid]==="11:00";
+
+      if(mid==="kambara"){
+        /* 神原: ○9時 → ○11時 → × → ○9時 */
+        if(on&&!isLate){
+          /* ○9時 → ○11時 */
+          st[mid]="11:00";
+        }else if(on&&isLate){
+          /* ○11時 → × */
+          na=na.filter(function(id){return id!==mid;});
+          delete st[mid];
+        }else if(!on){
+          /* × → ○9時 */
+          na.push(mid);
+          delete st[mid];
+        }
+      }else{
+        /* 他メンバー: ○ → 有休 → × → ○ */
+        if(on&&!isPaid){
+          na=na.filter(function(id){return id!==mid;});
+          st[mid]="paid";
+        }else if(!on&&isPaid){
+          delete st[mid];
+        }else if(!on&&!isPaid){
+          na.push(mid);
+        }
       }
       u.att=na;
       u.startTimes=st;
